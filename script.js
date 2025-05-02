@@ -125,64 +125,85 @@ fetch(`${baseURL}/corridas.json`)
 });
 }
 
-function finalizarCancelamento(mensagem) {
-  alert(mensagem);
-  document.getElementById('corridaAceitaCard').classList.add('hidden');
-  rotaAtual = null;
-  document.getElementById('corridasContainer').style.display = 'block';
-  document.querySelector('h3 i.fa-taxi').parentElement.style.display = 'block';
-  carregarCorridas();
-}
+function finalizarCancelamento() {
+    // Remove a exibição do alerta padrão do navegador
+    document.getElementById('corridaAceitaCard').classList.add('hidden');
+    rotaAtual = null;
+    document.getElementById('corridasContainer').style.display = 'block';
+    document.querySelector('h3 i.fa-taxi').parentElement.style.display = 'block';
+    carregarCorridas();
+  }
 
 function cancelarCorrida(id) {
-  if (!id) return;
-
-  // Busca a corrida para saber quantos créditos foram usados
-  fetch(`${baseURL}/corridas/${id}.json`)
-    .then(res => res.json())
-    .then(corrida => {
-      if (!corrida) return;
-
-      const creditosUsados = corrida.creditosUsados || 0;
-
-      const atualizacoes = {
-        [`corridas/${id}/status`]: 'pendente',
-        [`corridas/${id}/motorista`]: null
-      };
-
-      if (podeCancelarComCredito) {
-        fetch(`${baseURL}/motoristas/${motoristaCPF}/creditos.json`)
-          .then(res => res.json())
-          .then(creditosAtuais => {
-            const novosCreditos = (creditosAtuais || 0) + creditosUsados;
-            atualizacoes[`motoristas/${motoristaCPF}/creditos`] = novosCreditos;
-
-            fetch(`${baseURL}/.json`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(atualizacoes)
-            }).then(() => {
-              motoristaCreditos = novosCreditos;
-              document.getElementById('creditosMotorista').textContent = novosCreditos;
-              finalizarCancelamento('Corrida cancelada. Créditos devolvidos.');
+    if (!id) return;
+  
+    console.log('Iniciando cancelamento da corrida com id:', id);
+  
+    // Busca a corrida para saber quantos créditos foram usados
+    fetch(`${baseURL}/corridas/${id}.json`)
+      .then(res => res.json())
+      .then(corrida => {
+        if (!corrida) {
+          console.log('Corrida não encontrada');
+          return;
+        }
+  
+        const creditosUsados = corrida.creditosUsados || 0;
+  
+        const atualizacoes = {
+          [`corridas/${id}/status`]: 'pendente',
+          [`corridas/${id}/motorista`]: null
+        };
+  
+        console.log('Créditos usados:', creditosUsados);
+  
+        if (podeCancelarComCredito) {
+          fetch(`${baseURL}/motoristas/${motoristaCPF}/creditos.json`)
+            .then(res => res.json())
+            .then(creditosAtuais => {
+              const novosCreditos = (creditosAtuais || 0) + creditosUsados;
+              atualizacoes[`motoristas/${motoristaCPF}/creditos`] = novosCreditos;
+  
+              console.log('Novos créditos do motorista:', novosCreditos);
+  
+              fetch(`${baseURL}/.json`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(atualizacoes)
+              }).then(() => {
+                motoristaCreditos = novosCreditos;
+                document.getElementById('creditosMotorista').textContent = novosCreditos;
+                console.log('Chamando finalizarCancelamento');
+                finalizarCancelamento('w');  // Chama a função sem a mensagem
+                console.log('Chamando mostrarAlertaSimples');
+                mostrarAlertaSimples('Corrida cancelada');  // Exibe a mensagem de alerta
+                carregarCorridas();
+              });
+            })
+            .catch(error => {
+              console.error('Erro ao buscar créditos do motorista:', error);
+              alert('Erro ao buscar créditos do motorista.');
             });
+        } else {
+          fetch(`${baseURL}/.json`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(atualizacoes)
+          }).then(() => {
+            console.log('Chamando finalizarCancelamento');
+            finalizarCancelamento('s');  // Chama a função sem a mensagem
+            console.log('Chamando mostrarAlertaSimples');
+            mostrarAlertaSimples('Corrida cancelada');  // Exibe a mensagem de alerta
+            carregarCorridas();
           });
-      } else {
-        fetch(`${baseURL}/.json`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(atualizacoes)
-        }).then(() => {
-          finalizarCancelamento('Corrida cancelada após 10s. Créditos não devolvidos.');
-        });
-      }
-    })
-    .catch(error => {
-      console.error('Erro ao cancelar corrida:', error);
-      alert('Erro ao cancelar a corrida. Tente novamente.');
-    });
-}
-
+        }
+      })
+      .catch(error => {
+        console.error('Erro ao cancelar corrida:', error);
+        alert('Erro ao cancelar a corrida. Tente novamente.');
+      });
+  }
+  
 function mostrarCadastro() {
   document.getElementById('loginContainer').classList.add('hidden');
   document.getElementById('cadastroContainer').classList.remove('hidden');
@@ -297,7 +318,9 @@ function calcularCreditosPorValor(preco) {
   if (preco <= 20) return 3;
   if (preco <= 25) return 4;
   if (preco <= 30) return 5;
-  return 6;
+  if (preco <= 40) return 6;
+  if (preco <= 50) return 7;
+  return 8;
 }
 
 function carregarCorridas() {
@@ -468,60 +491,68 @@ fetch(`${baseURL}/corridas/${id}.json`, {
 function copiarTexto(id) {
   const texto = document.getElementById(id).textContent;
   navigator.clipboard.writeText(texto);
-  alert('Copiado: ' + texto);
+  mostrarAlertaSimples('copiado');
 }
 
 async function mostrarMapa(partida, destino) {
-  const coords = await Promise.all([
-    getCoords(partida),
-    getCoords(destino)
-  ]);
-
-  if (!coords[0] || !coords[1]) return;
-
-  if (mapaCorrida) {
-    mapaCorrida.remove();
+    try {
+      const coords = await Promise.all([
+        getCoords(partida),
+        getCoords(destino)
+      ]);
+  
+      if (!coords[0] || !coords[1]) return;
+  
+      // Remove mapa anterior
+      if (mapaCorrida) {
+        mapaCorrida.remove();
+      }
+  
+      mapaCorrida = L.map('mapaCorrida').setView(coords[0], 13);
+  
+      // Camada visual
+      L.tileLayer(`https://maps.geoapify.com/v1/tile/osm-carto/{z}/{x}/{y}.png?apiKey=${geoapifyKey}`, {
+        attribution: '© OpenMapTiles © OpenStreetMap contributors',
+        maxZoom: 20
+      }).addTo(mapaCorrida);
+  
+      // Ícones personalizados
+      const iconeA = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/252/252025.png',
+        iconSize: [30, 30],
+        iconAnchor: [15, 30]
+      });
+  
+      const iconeB = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+        iconSize: [30, 30],
+        iconAnchor: [15, 30]
+      });
+  
+      // Marcadores visíveis mesmo que rota falhe
+      L.marker(coords[0], { icon: iconeA }).addTo(mapaCorrida).bindPopup("Partida").openPopup();
+      L.marker(coords[1], { icon: iconeB }).addTo(mapaCorrida).bindPopup("Destino");
+  
+      // ✅ Corrigido: ordem correta [latitude, longitude]
+      const rotaURL = `https://api.geoapify.com/v1/routing?waypoints=${coords[0][0]},${coords[0][1]}|${coords[1][0]},${coords[1][1]}&mode=drive&apiKey=${geoapifyKey}`;
+      const routeRes = await fetch(rotaURL);
+      const routeData = await routeRes.json();
+  
+      if (routeData.features && routeData.features.length > 0) {
+        const rotaCoords = routeData.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
+        L.polyline(rotaCoords, { color: 'blue', weight: 5 }).addTo(mapaCorrida);
+        mapaCorrida.fitBounds(rotaCoords, { padding: [50, 50] });
+  
+        document.getElementById('distanciaAceita').textContent = (routeData.features[0].properties.distance / 1000).toFixed(2);
+        document.getElementById('duracaoAceita').textContent = (routeData.features[0].properties.time / 60).toFixed(1);
+      } else {
+        console.warn('Rota não encontrada, mas marcadores exibidos.');
+      }
+    } catch (error) {
+      console.error('Erro ao mostrar o mapa:', error);
+    }
   }
-  mapaCorrida = L.map('mapaCorrida').setView(coords[0], 13);
-
-  // Tile Layer mais bonito da Geoapify
-  L.tileLayer(`https://maps.geoapify.com/v1/tile/osm-carto/{z}/{x}/{y}.png?apiKey=${geoapifyKey}`, {
-    attribution: '© OpenMapTiles © OpenStreetMap contributors',
-    maxZoom: 20
-  }).addTo(mapaCorrida);
-
-  // Ícones personalizados
-  const iconeA = L.icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/252/252025.png',
-    iconSize: [30, 30],
-    iconAnchor: [15, 30],
-    popupAnchor: [0, -30]
-  });
-
-  const iconeB = L.icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
-    iconSize: [30, 30],
-    iconAnchor: [15, 30],
-    popupAnchor: [0, -30]
-  });
-
-  L.marker(coords[0], { icon: iconeA }).addTo(mapaCorrida).bindPopup("Partida").openPopup();
-  L.marker(coords[1], { icon: iconeB }).addTo(mapaCorrida).bindPopup("Destino");
-
-  const routeRes = await fetch(`https://api.geoapify.com/v1/routing?waypoints=${coords[0][1]},${coords[0][0]}|${coords[1][1]},${coords[1][0]}&mode=drive&apiKey=${geoapifyKey}`);
-  const routeData = await routeRes.json();
-
-  if (!routeData.features || routeData.features.length === 0) return alert('Não foi possível traçar a rota.');
-
-  const rotaCoords = routeData.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
-  L.polyline(rotaCoords, { color: 'blue', weight: 5 }).addTo(mapaCorrida);
-
-  mapaCorrida.fitBounds(rotaCoords, { padding: [50, 50] });
-
-  document.getElementById('distanciaAceita').textContent = (routeData.features[0].properties.distance / 1000).toFixed(2);
-  document.getElementById('duracaoAceita').textContent = (routeData.features[0].properties.time / 60).toFixed(1);
-}
-
+  
 async function getCoords(endereco) {
   const res = await fetch(`https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(endereco)}&apiKey=${geoapifyKey}`);
   const data = await res.json();
@@ -552,7 +583,7 @@ async function mostrarMapa(partida, destino) {
   fetch(`https://api.geoapify.com/v1/routing?waypoints=${coords[0][1]},${coords[0][0]}|${coords[1][1]},${coords[1][0]}&mode=drive&apiKey=${geoapifyKey}`)
     .then(res => res.json())
     .then(data => {
-      if (!data.features || data.features.length === 0) return alert('Não foi possível traçar a rota.');
+      if (!data.features || data.features.length === 0);
 
       const rota = data.features[0];
       const rotaCoords = rota.geometry.coordinates.map(c => [c[1], c[0]]);
@@ -562,7 +593,7 @@ async function mostrarMapa(partida, destino) {
       document.getElementById('distanciaAceita').textContent = (rota.properties.distance / 1000).toFixed(2);
       document.getElementById('duracaoAceita').textContent = (rota.properties.time / 60).toFixed(1);
     })
-    .catch(() => alert('Erro ao buscar rota. Verifique os endereços.'));
+    .catch();
 }
 
 function fecharCorrida(id) {
@@ -580,7 +611,7 @@ fetch(`${baseURL}/corridas/${idCorrida}.json`)
     // Se a corrida sumiu completamente (deletada do banco)
     if (!corrida) {
       clearInterval(interval);
-      alert('Corrida foi removida do sistema.');
+    //  alert('Corrida foi removida do sistema.');
       document.getElementById('corridaAceitaCard').classList.add('hidden');
       document.querySelector('h3 i.fa-taxi').parentElement.style.display = 'block';
       carregarCorridas();
@@ -590,7 +621,7 @@ fetch(`${baseURL}/corridas/${idCorrida}.json`)
     // Se a corrida foi cancelada por outro (não é mais "aceita")
     if (corrida.status !== 'aceita' || corrida.motorista !== cpfMotorista) {
       clearInterval(interval);
-      alert('Corrida não está mais disponível.');
+      //alert('Corrida não está mais disponível.');
       document.getElementById('corridaAceitaCard').classList.add('hidden');
       document.querySelector('h3 i.fa-taxi').parentElement.style.display = 'block';
       carregarCorridas();
@@ -713,7 +744,7 @@ document.getElementById('modeloMotorista').textContent = novoModelo;
 document.getElementById('placaMotorista').textContent = novaPlaca;
 
 fecharModal();
-alert("Dados atualizados com sucesso!");
+mostrarAlertaSimples('Dados atualizados com sucesso!');
 })
 .catch(err => {
 console.error("Erro ao salvar edição:", err);
@@ -721,7 +752,6 @@ alert("Erro ao salvar os dados.");
 });
 }
 
-// Função para obter a localização atual do motorista
 function obterLocalizacaoAtual(callback) {
 if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(function(position) {
@@ -738,7 +768,6 @@ if (navigator.geolocation) {
 }
 }
 
-// Função para navegar até o Passageiro
 function navegarPassageiro() {
 obterLocalizacaoAtual(function(localizacaoAtual) {
     const partida = document.getElementById('endPartida').textContent; // Endereço de partida do passageiro
@@ -753,7 +782,6 @@ obterLocalizacaoAtual(function(localizacaoAtual) {
 });
 }
 
-// Função para navegar até o Destino
 function navegarDestino() {
 obterLocalizacaoAtual(function(localizacaoAtual) {
     const destino = document.getElementById('endDestino').textContent; // Endereço de destino do passageiro
