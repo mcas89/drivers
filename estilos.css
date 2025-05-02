@@ -7,6 +7,7 @@
   
   html {
     scroll-behavior: smooth;
+    font-size: 18px;  /* Aumentei o tamanho da fonte base */
   }
   
   body {
@@ -53,7 +54,7 @@
   
   p {
     margin: 0.5rem 0;
-    font-size: 0.9rem;
+    font-size: 1.0rem; /* Aumentei o tamanho padrão */
     color: #555;
   }
   
@@ -169,7 +170,7 @@
   }
   
   .cardPainel p, .cardPainel i {
-    font-size: 0.85rem;
+    font-size: 0.9rem; /* Aumentei um pouco */
   }
   
   /* Cartão de corrida aceita */
@@ -207,7 +208,7 @@
   }
   
   .endereco-texto {
-    font-size: 14px;
+    font-size: 15px; /* Aumentei um pouco */
     color: #333;
     word-break: break-word;
   }
@@ -217,7 +218,7 @@
     justify-content: center;
     gap: 16px;
     margin-top: 10px;
-    font-size: 0.9rem;
+    font-size: 1.0rem; /* Aumentei um pouco */
   }
   
   .mapa-corrida {
@@ -273,22 +274,25 @@
     }
   
     h2 {
-      font-size: 1.5rem;
+      font-size: 1.7rem;  /* Aumentei para telas menores */
+    }
+    h3 {
+        font-size: 1.3rem; /* Aumentei para telas menores */
+    }
+    h4 {
+        font-size: 1.1rem; /* Aumentei para telas menores */
     }
   
     input, button {
-      font-size: 13px;
+      font-size: 14px; /* Aumentei um pouco */
     }
   
     .card-corrida {
-      font-size: 12px;
+      font-size: 13px; /* Aumentei um pouco */
       padding: 12px;
     }
   
     .btn-copy {
-      font-size: 10px;
+      font-size: 11px; /* Aumentei um pouco */
     }
   }
-
-
-  
