@@ -31,6 +31,9 @@
     <input type="text" id="telefoneCadastro" placeholder="Telefone">
     <input type="text" id="modeloCadastro" placeholder="Modelo do Veículo">
     <input type="text" id="placaCadastro" placeholder="Placa">
+      <select id="BairroPai">
+        <option value="">Bairro</option>
+      </select>
     <button onclick="cadastrarMotorista()">
       <i class="fas fa-user-plus"></i> Cadastrar
     </button>
@@ -45,10 +48,17 @@
       <!-- Linha de ícones no topo -->
       <div class="topoIcons">
         <div class="iconItem">
-          <i class="fas fa-star"></i>
+          <i class="fas fa-wallet"></i>
           <span id="creditosMotorista" style="font-size: 0.8rem;">0</span>
         </div>
-    
+
+
+      <div class="iconItem">
+        <i class="fas fa-map-marker-alt"></i>
+        <span class="iconText" id="bairroMotorista"></span>
+      </div>                     
+
+
         <div class="iconItem" onclick="editarDadosMotorista()">
           <i class="fas fa-pen"></i>
           <span class="iconText">Editar</span>
@@ -59,21 +69,25 @@
           <i class="fas fa-sign-out-alt"></i>
           <span class="iconText">Logof</span>
         </div>
-      </div>
+
+         </div>
+
+
+
     
       <!-- Informações do motorista -->
-      <div class="cardPainel">
-        <h2><i class="fas fa-user"></i> <span id="nomeMotorista"></span></h2>
-        <p><i class="fas fa-phone"></i> <span id="telefoneMotorista"></span></p>
-        <p><i class="fas fa-car-side"></i> <span id="modeloMotorista"></span> - <span id="placaMotorista"></span></p>
-      </div>
+    <div class="cardPainel">
+      <h2><i class="fas fa-user"></i> <span id="nomeMotorista"></span></h2>
+      <p><i class="fas fa-phone"></i> <span id="telefoneMotorista"></span></p>
+      <p><i class="fas fa-car-side"></i> <span id="modeloMotorista"></span> - <span id="placaMotorista"></span></p>
+    </div>
     
     </div>
     
   
 
     <h3 id="corridasDisponiveis">
-      <i class="fas fa-taxi"></i> Corridas Disponíveis
+      <i class="fas fa-taxi"></i> Buscando corridas
       <i id="loadingIcon" class="fas fa-spinner fa-spin hidden" style="margin-left: 10px;"></i>
     </h3>
 
@@ -141,6 +155,8 @@
       <h3>Editar Dados</h3>
       <label>Nome:</label>
       <input type="text" id="editarNome">
+
+
   
       <label>Telefone:</label>
       <input type="text" id="editarTelefone">
@@ -150,11 +166,29 @@
   
       <label>Placa:</label>
       <input type="text" id="editarPlaca">
-  
+
+      <label>Bairro:</label>
+      <select id="editarBairro">
+        <option value="">Selecione um bairro</option>
+      </select>
+ 
       <button onclick="salvarEdicao()">Salvar</button>
       <button onclick="fecharModal()" class="cancelar">Cancelar</button>
     </div>
   </div>
+
+<div id="editarBairroModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Editar Bairro</h3>
+    <select id="editarBairro">
+      <option value="">Selecione um bairro</option>
+    </select>
+    <button onclick="salvarBairro()">Salvar</button>
+    <button onclick="fecharModalBairro()" class="cancelar">Cancelar</button>
+  </div>
+</div>
+
+
   
 </body>
 
