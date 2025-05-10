@@ -8,34 +8,94 @@ let mapaCorrida;
 let wakeLock = null;
 let timestampAceitacao = null;
 let podeCancelarComCredito = true;
+let bairroPaiMotorista = '';
+
+const bairros = {
+  "Parque Continental": [
+      "Continental I", "Continental II", "Continental III", "Continental IV", "Continental V",
+      "Jardim Renzo (Gleba I)", "Jardim Betel (Antigo Parque Continental Gleba B)",
+      "Jardim Gracinda (Gleba II)", "Jardim Cambará (Gleba III)", "Jardim Valéria (Gleba IV)",
+      "Jardim Itapoã (Gleba IV)", "Jardim Adriana I (Gleba V)", "Jardim Adriana II (Gleba V)"
+  ],
+  "Cabuçu": [
+      "Vila Cambara", "Jardim Dorali", "Jardim Palmira", "Jardim Rosana", "Jardim Renzo",
+      "Recreio São Jorge", "Novo Recreio", "Chácaras Cabuçu", "Jardim Monte Alto"
+  ],
+  "São João": [
+      "Vila Rica", "Vila São João", "Jardim São Geraldo", "Jardim Vida Nova", "Jardim São João",
+      "Vila São Carlos", "Jardim Lenize", "Jardim Bondança", "Jardim Jade", "Jardim Cristina",
+      "Vila Girassol", "Jardim Santa Terezinha", "Jardim Aeródromo", "Cidade Soberana",
+      "Jardim Santo Expedito", "Cidade Seródio", "Jardim Novo Portugal", "Jardim Regina",
+      "Conjunto Residencial Haroldo Veloso"
+  ],
+  "Taboão": [
+      "Vila Mesquita", "Jardim Nova Taboão", "Jardim Santa Emília", "Jardim Imperial",
+      "Jardim Silvia", "Jardim Paraíso", "Jardim Acácio", "Parque Mikail", "Parque Mikail II",
+      "Jardim Araújo", "Vila Araújo", "Jardim Beirute", "Vila do Eden", "Jardim Odete",
+      "Jardim Taboão", "Jardim Santa Inês", "Jardim Santa Rita", "Jardim Belvedere",
+      "Jardim São Domingos", "Jardim Santa Lídia", "Jardim Dona Meri", "Jardim Marilena",
+      "Jardim Seviolli II", "Jardim Santa Vicência", "Jardim Sueli", "Jardim São José",
+      "Jardim Capri", "Jardim das Acácias", "Jardim Pereira", "Jardim Santo Eduardo",
+      "Jardim Tamassia", "Parque Santo Agostinho", "Parque Industrial do Jardim São Geraldo"
+  ],
+  "Fortaleza": [
+      "Jardim Fortaleza", "Rocinha"
+  ]
+  // ... (adicione os outros bairros)
+};
 
 window.onload = () => {
-  solicitarWakeLock()
+  solicitarWakeLock();
   document.getElementById('painelMotorista').classList.add('hidden');
-const motoristaSalvo = localStorage.getItem('motoristaLogado');
-if (motoristaSalvo) {
-motoristaCPF = motoristaSalvo;
-fetch(`${baseURL}/motoristas/${motoristaCPF}.json`)
-  .then(res => res.json())
-  .then(data => {
-    if (data) {
-      motoristaCreditos = data.creditos || 0;
-      document.getElementById('nomeMotorista').textContent = data.nome;
-      document.getElementById('telefoneMotorista').textContent = data.telefone;
-      document.getElementById('modeloMotorista').textContent = data.modelo;
-      document.getElementById('placaMotorista').textContent = data.placa;
-      document.getElementById('creditosMotorista').textContent = motoristaCreditos;
 
-      document.getElementById('loginContainer').classList.add('hidden');
-      document.getElementById('painelMotorista').classList.remove('hidden');
-      buscarCorridaAceita();
+  // Preencher combobox com os bairros pai
+  const selectBairroPai = document.getElementById('BairroPai');
+  for (const bairroPai in bairros) {
+    const option = document.createElement('option');
+    option.value = bairroPai;
+    option.textContent = bairroPai;
+    selectBairroPai.appendChild(option);
+  }
 
-      carregarCorridas();
-      setInterval(carregarCorridas, 5000);
-    }
-  });
-}
-}
+  const selectEditarBairro = document.getElementById('editarBairro');
+  for (const bairroPai in bairros) {
+    const option = document.createElement('option');
+    option.value = bairroPai;
+    option.textContent = bairroPai;
+    selectEditarBairro.appendChild(option);
+  }
+
+  const motoristaSalvo = localStorage.getItem('motoristaLogado');
+  
+  if (motoristaSalvo) {
+    motoristaCPF = motoristaSalvo;
+    fetch(`${baseURL}/motoristas/${motoristaCPF}.json`)
+      .then(res => res.json())
+      .then(data => {
+        if (data) {
+          motoristaCreditos = data.creditos || 0;
+          document.getElementById('nomeMotorista').textContent = data.nome;
+          document.getElementById('telefoneMotorista').textContent = data.telefone;
+          document.getElementById('modeloMotorista').textContent = data.modelo;
+          document.getElementById('placaMotorista').textContent = data.placa;
+          document.getElementById('creditosMotorista').textContent = motoristaCreditos;
+          document.getElementById('bairroMotorista').textContent = data.bairroPai;
+
+          // 🔧 Preenche o campo BairroPai com o valor salvo do motorista
+          document.getElementById('BairroPai').value = data.bairroPai || '';
+
+          document.getElementById('loginContainer').classList.add('hidden');
+          document.getElementById('painelMotorista').classList.remove('hidden');
+          bairroPaiMotorista = data.bairroPai;
+
+          buscarCorridaAceita();
+
+          carregarCorridas();
+          setInterval(carregarCorridas, 5000);
+        }
+      });
+  }
+};
 
 function logoutMotorista() {
   localStorage.removeItem('motoristaLogado');
@@ -217,55 +277,64 @@ function mostrarLogin() {
 }
 
 async function cadastrarMotorista() {
-const nome = document.getElementById('nomeCadastro').value.trim();
-const cpf = document.getElementById('cpfCadastro').value.trim();
-const senha = document.getElementById('senhaCadastro').value.trim();
-const telefone = document.getElementById('telefoneCadastro').value.trim();
-const modelo = document.getElementById('modeloCadastro').value.trim();
-const placa = document.getElementById('placaCadastro').value.trim();
+  const bairroPai = document.getElementById('BairroPai').value.trim();
+  const nome = document.getElementById('nomeCadastro').value.trim();
+  const cpf = document.getElementById('cpfCadastro').value.trim();
+  const senha = document.getElementById('senhaCadastro').value.trim();
+  const telefone = document.getElementById('telefoneCadastro').value.trim();
+  const modelo = document.getElementById('modeloCadastro').value.trim();
+  const placa = document.getElementById('placaCadastro').value.trim();
 
-// Validação simples
-if (!nome || !cpf || !senha || !telefone || !modelo || !placa) {
-alert('Por favor, preencha todos os campos.');
-return;
-}
+  // Validação simples
+  if (!nome || !cpf || !senha || !telefone || !modelo || !placa || !bairroPai) {
+    alert('Por favor, preencha todos os campos.');
+    return;
+  }
 
-// Validação de CPF
-if (!validarCPF(cpf)) {
-alert('CPF inválido. Por favor, digite um CPF válido.');
-return;
-}
+  // Validação de CPF
+  if (!validarCPF(cpf)) {
+    alert('CPF inválido. Por favor, digite um CPF válido.');
+    return;
+  }
 
-try {
-// Verifica se o CPF já está cadastrado
-const res = await fetch(`${baseURL}/motoristas/${cpf}.json`);
-if (!res.ok) throw new Error('Erro ao verificar CPF.');
+  try {
+    // Verifica se o CPF já está cadastrado
+    const res = await fetch(`${baseURL}/motoristas/${cpf}.json`);
+    if (!res.ok) throw new Error('Erro ao verificar CPF.');
 
-const data = await res.json();
-if (data) {
-  alert('Já existe um motorista cadastrado com este CPF.');
-  return;
-}
+    const data = await res.json();
+    if (data) {
+      alert('Já existe um motorista cadastrado com este CPF.');
+      return;
+    }
 
-// Cadastra o novo motorista
-const response = await fetch(`${baseURL}/motoristas/${cpf}.json`, {
-  method: 'PUT',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ nome, senha, telefone, modelo, placa, creditos: 0 })
-});
+    // Cadastra o novo motorista
+    const response = await fetch(`${baseURL}/motoristas/${cpf}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nome,
+        senha,
+        telefone,
+        modelo,
+        placa,
+        bairroPai,
+        creditos: 0
+      })
+    });
 
-if (!response.ok) throw new Error('Erro ao cadastrar motorista');
+    if (!response.ok) throw new Error('Erro ao cadastrar motorista.');
 
-alert('Cadastro realizado com sucesso!');
+    alert('Cadastro realizado com sucesso!');
 
-// Oculta o painel do motorista e mostra o login após o cadastro
-document.getElementById('painelMotorista').classList.add('hidden');
-mostrarLogin();  // Chama a função para exibir a tela de login
+    // Oculta o painel do motorista e mostra o login após o cadastro
+    document.getElementById('painelMotorista').classList.add('hidden');
+    mostrarLogin();
 
-} catch (error) {
-console.error(error);
-alert('Erro ao cadastrar. Tente novamente.');
-}
+  } catch (error) {
+    console.error(error);
+    alert('Erro ao cadastrar. Tente novamente.');
+  }
 }
 
 function sairParaLogin() {
@@ -324,55 +393,81 @@ function calcularCreditosPorValor(preco) {
 }
 
 function carregarCorridas() {
-fetch(`${baseURL}/corridas.json`)
-.then(res => res.json())
-.then(data => {
-  const container = document.getElementById('corridasContainer');
-  container.innerHTML = '';
+  if (!bairroPaiMotorista) {
+    console.warn('❌ Variável bairroPaiMotorista ainda não definida.');
+    return;
+  }
 
-  for (const id in data) {
-    const corrida = data[id];
-    if (corrida.status === 'pendente' || corrida.status === 'cancelado') {
-      const creditosNecessarios = calcularCreditosPorValor(corrida.preco);
+  const bairroPai = bairroPaiMotorista.trim().toLowerCase();
+  console.log('📍 Bairro pai informado pelo motorista:', bairroPai);
 
-      const card = document.createElement('div');
-    card.className = 'card-corrida';
-    card.id = `card-${id}`; // cada card com um ID único!
+  // Obtem os bairros filhos comparando em minúsculo
+  const bairrosFilhosPermitidos = Object.entries(bairros).reduce((acc, [pai, filhos]) => {
+    if (pai.toLowerCase() === bairroPai) {
+      console.log(`✅ Bairro pai reconhecido: ${pai}`);
+      return filhos;
+    }
+    return acc;
+  }, []);
 
-    card.innerHTML = `
-    <p><i class="fas fa-map-marker-alt"></i> <strong>Partida:</strong><br>${corrida.partida}</p>
-    <p><i class="fas fa-map-pin"></i> <strong>Destino:</strong><br>${corrida.destino}</p>
-  
-    <div style="display: flex; justify-content: center; gap: 12px; margin: 8px 0; font-size: 13px;">
-      <span><i class="fas fa-road"></i> ${corrida.distancia_km.toFixed(2)} km</span>
-      <span><i class="fas fa-coins"></i> R$ ${corrida.preco.toFixed(2)}</span>
-      <span><i class="fas fa-star"></i> ${creditosNecessarios} créditos</span>
-    </div>
-  
-    <div style="display: flex; gap: 5px; margin-top: 2px;">
-      <button style="flex: 1; padding: 5px; font-size: 13px; border-radius: 6px; background-color: #4CAF50; color: white; border: none; font-weight: 600; cursor: pointer;"
-        onclick="aceitarCorrida('${id}', ${creditosNecessarios}, '${corrida.partida}', '${corrida.destino}', ${corrida.preco}, ${corrida.distancia_km})">
-        <i class="fas fa-check"></i> Aceitar
-      </button>
-      <button style="flex: 1; padding: 5px; font-size: 13px; border-radius: 6px; background-color: #e53935; color: white; border: none; font-weight: 600; cursor: pointer;"
-        onclick="fecharCorrida('${id}')">
-        <i class="fas fa-times"></i> Fechar
-      </button>
-    </div>
-  `;
-  
-  
-    container.appendChild(card);
-    
+  console.log('👀 Bairros filhos permitidos:', bairrosFilhosPermitidos);
 
+  if (!bairrosFilhosPermitidos || bairrosFilhosPermitidos.length === 0) {
+    console.warn('⚠️ Nenhum bairro filho encontrado para o bairro pai:', bairroPai);
+  }
 
+  fetch(`${baseURL}/corridas.json`)
+    .then(res => res.json())
+    .then(data => {
+      const container = document.getElementById('corridasContainer');
+      container.innerHTML = '';
 
+      let corridasEncontradas = 0;
 
+      for (const id in data) {
+        const corrida = data[id];
+        const bairroPassageiro = corrida.bairroPassageiro;
 
+        console.log(`🔄 Avaliando corrida ${id} - Bairro passageiro: ${bairroPassageiro}`);
 
-    }
-  }
-});
+        if (
+          (corrida.status === 'pendente' || corrida.status === 'cancelado') &&
+          bairrosFilhosPermitidos.includes(bairroPassageiro)
+        ) {
+          corridasEncontradas++;
+
+          const creditosNecessarios = calcularCreditosPorValor(corrida.preco);
+
+          const card = document.createElement('div');
+          card.className = 'card-corrida';
+          card.id = `card-${id}`;
+
+          card.innerHTML = `
+            <p><i class="fas fa-map-marker-alt"></i> <strong>Partida:</strong><br>${corrida.partida}</p>
+            <p><i class="fas fa-map-pin"></i> <strong>Destino:</strong><br>${corrida.destino}</p>
+            <div style="display: flex; justify-content: center; gap: 12px; margin: 8px 0; font-size: 13px;">
+              <span><i class="fas fa-road"></i> ${corrida.distancia_km.toFixed(2)} km</span>
+              <span><i class="fas fa-coins"></i> R$ ${corrida.preco.toFixed(2)}</span>
+              <span><i class="fas fa-wallet"></i> ${creditosNecessarios} créditos</span>
+            </div>
+            <div style="display: flex; gap: 5px; margin-top: 2px;">
+              <button style="flex: 1; padding: 5px; font-size: 13px; border-radius: 6px; background-color: #4CAF50; color: white; border: none; font-weight: 600; cursor: pointer;"
+                onclick="aceitarCorrida('${id}', ${creditosNecessarios}, '${corrida.partida}', '${corrida.destino}', ${corrida.preco}, ${corrida.distancia_km})">
+                <i class="fas fa-check"></i> Aceitar
+              </button>
+              <button style="flex: 1; padding: 5px; font-size: 13px; border-radius: 6px; background-color: #e53935; color: white; border: none; font-weight: 600; cursor: pointer;"
+                onclick="fecharCorrida('${id}')">
+                <i class="fas fa-times"></i> Fechar
+              </button>
+            </div>
+          `;
+
+          container.appendChild(card);
+        }
+      }
+
+      console.log(`🎯 Total de corridas exibidas: ${corridasEncontradas}`);
+    });
 }
 
 function aceitarCorrida(id, creditosNecessarios, partida, destino, preco, distancia_km) {
@@ -700,56 +795,80 @@ setTimeout(() => {
 }
 
 function editarDadosMotorista() {
-fetch(`${baseURL}/motoristas/${motoristaCPF}.json`)
-.then(res => res.json())
-.then(data => {
-  if (data) {
-    document.getElementById('editarNome').value = data.nome || '';
-    document.getElementById('editarTelefone').value = data.telefone || '';
-    document.getElementById('editarModelo').value = data.modelo || '';
-    document.getElementById('editarPlaca').value = data.placa || '';
+  fetch(`${baseURL}/motoristas/${motoristaCPF}.json`)
+    .then(res => res.json())
+    .then(data => {
+      if (data) {
+        // Preencher os campos com os dados do motorista
+        document.getElementById('editarNome').value = data.nome || '';
+        document.getElementById('editarTelefone').value = data.telefone || '';
+        document.getElementById('editarModelo').value = data.modelo || '';
+        document.getElementById('editarPlaca').value = data.placa || '';
 
-    document.getElementById('editarModal').classList.remove('hidden');
-  }
-});
+        // Preencher o campo de Bairro no modal
+        const selectEditarBairro = document.getElementById('editarBairro');
+        // Adicionar os bairros ao select, se ainda não foram carregados
+        if (!selectEditarBairro.hasChildNodes()) {
+          for (const bairroPai in bairros) {
+            const option = document.createElement('option');
+            option.value = bairroPai;
+            option.textContent = bairroPai;
+            selectEditarBairro.appendChild(option);
+          }
+        }
+        // Definir o bairro atual do motorista no select
+        document.getElementById('editarBairro').value = data.bairroPai || '';
+
+        // Exibir o modal de edição
+        document.getElementById('editarModal').classList.remove('hidden');
+      }
+    });
+}
+
+function salvarEdicao() {
+  const novoNome = document.getElementById('editarNome').value.trim();
+  const novoTel = document.getElementById('editarTelefone').value.trim();
+  const novoModelo = document.getElementById('editarModelo').value.trim();
+  const novaPlaca = document.getElementById('editarPlaca').value.trim();
+  const novoBairro = document.getElementById('editarBairro').value.trim(); // Captura o bairro editado
+
+  const atualizados = {
+    nome: novoNome,
+    telefone: novoTel,
+    modelo: novoModelo,
+    placa: novaPlaca,
+    bairroPai: novoBairro // Atualiza o bairro também
+  };
+
+  fetch(`${baseURL}/motoristas/${motoristaCPF}.json`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(atualizados)
+  })
+  .then(res => res.json())
+  .then(() => {
+    // Atualiza na interface
+    document.getElementById('nomeMotorista').textContent = novoNome;
+    document.getElementById('telefoneMotorista').textContent = novoTel;
+    document.getElementById('modeloMotorista').textContent = novoModelo;
+    document.getElementById('placaMotorista').textContent = novaPlaca;
+    document.getElementById('bairroMotorista').textContent = novoBairro; // Atualiza o bairro na interface
+
+    bairroPaiMotorista = novoBairro;
+    carregarCorridas();
+
+
+    fecharModal();
+    mostrarAlertaSimples('Dados atualizados com sucesso!');
+  })
+  .catch(err => {
+    console.error("Erro ao salvar edição:", err);
+    alert("Erro ao salvar os dados.");
+  });
 }
 
 function fecharModal() {
 document.getElementById('editarModal').classList.add('hidden');
-}
-
-function salvarEdicao() {
-const novoNome = document.getElementById('editarNome').value.trim();
-const novoTel = document.getElementById('editarTelefone').value.trim();
-const novoModelo = document.getElementById('editarModelo').value.trim();
-const novaPlaca = document.getElementById('editarPlaca').value.trim();
-
-const atualizados = {
-nome: novoNome,
-telefone: novoTel,
-modelo: novoModelo,
-placa: novaPlaca
-};
-
-fetch(`${baseURL}/motoristas/${motoristaCPF}.json`, {
-method: 'PATCH',
-body: JSON.stringify(atualizados)
-})
-.then(res => res.json())
-.then(() => {
-// Atualiza na interface
-document.getElementById('nomeMotorista').textContent = novoNome;
-document.getElementById('telefoneMotorista').textContent = novoTel;
-document.getElementById('modeloMotorista').textContent = novoModelo;
-document.getElementById('placaMotorista').textContent = novaPlaca;
-
-fecharModal();
-mostrarAlertaSimples('Dados atualizados com sucesso!');
-})
-.catch(err => {
-console.error("Erro ao salvar edição:", err);
-alert("Erro ao salvar os dados.");
-});
 }
 
 function obterLocalizacaoAtual(callback) {
@@ -795,4 +914,3 @@ obterLocalizacaoAtual(function(localizacaoAtual) {
     }
 });
 }
-
