@@ -363,7 +363,7 @@ function loginMotorista() {
       document.getElementById('modeloMotorista').textContent = data.modelo;
       document.getElementById('placaMotorista').textContent = data.placa;
       document.getElementById('creditosMotorista').textContent = motoristaCreditos;
-    
+      document.getElementById('bairroMotorista').textContent = data.bairroPai;
 
       document.getElementById('loginContainer').classList.add('hidden');
       document.getElementById('painelMotorista').classList.remove('hidden');
