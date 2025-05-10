@@ -357,6 +357,7 @@ function loginMotorista() {
 
       motoristaCPF = cpf;
       motoristaCreditos = data.creditos || 0;
+      bairroPaiMotorista = data.bairroPai;
 
       document.getElementById('nomeMotorista').textContent = data.nome;
       document.getElementById('telefoneMotorista').textContent = data.telefone;
