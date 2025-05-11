@@ -408,81 +408,78 @@ function calcularCreditosPorValor(preco) {
 }
 
 function carregarCorridas() {
-  if (!bairroPaiMotorista) {
-    return;
-  }
+  if (!bairroPaiMotorista) {
+    return;
+  }
 
-  const bairroPai = bairroPaiMotorista.trim().toLowerCase();
- // console.log('📍 Bairro pai informado pelo motorista:', bairroPai);
+  const bairroPai = bairroPaiMotorista.trim().toLowerCase();
 
-  // Obtem os bairros filhos comparando em minúsculo
-  const bairrosFilhosPermitidos = Object.entries(bairros).reduce((acc, [pai, filhos]) => {
-    if (pai.toLowerCase() === bairroPai) {
- //     console.log(`✅ Bairro pai reconhecido: ${pai}`);
-      return filhos;
-    }
-    return acc;
-  }, []);
+  // Obtem os bairros filhos comparando em minúsculo
+  const bairrosFilhosPermitidos = Object.entries(bairros).reduce((acc, [pai, filhos]) => {
+    if (pai.toLowerCase() === bairroPai) {
+      return filhos;
+    }
+    return acc;
+  }, []);
 
- // console.log('👀 Bairros filhos permitidos:', bairrosFilhosPermitidos);
+  if (!bairrosFilhosPermitidos || bairrosFilhosPermitidos.length === 0) {
+    return;
+  }
 
-  if (!bairrosFilhosPermitidos || bairrosFilhosPermitidos.length === 0) {
- //   console.warn('⚠️ Nenhum bairro filho encontrado para o bairro pai:', bairroPai);
-  }
+  fetch(`${baseURL}/corridas.json`)
+    .then(res => res.json())
+    .then(data => {
+      const container = document.getElementById('corridasContainer');
+      container.innerHTML = '';
 
-  fetch(`${baseURL}/corridas.json`)
-    .then(res => res.json())
-    .then(data => {
-      const container = document.getElementById('corridasContainer');
-      container.innerHTML = '';
+      let corridasEncontradas = 0;
 
-      let corridasEncontradas = 0;
+      for (const id in data) {
+        const corrida = data[id];
+        const bairroPassageiro = corrida.bairroPassageiro;
 
-      for (const id in data) {
-        const corrida = data[id];
-        const bairroPassageiro = corrida.bairroPassageiro;
+        if (
+          (corrida.status === 'pendente' || corrida.status === 'cancelado') &&
+          bairrosFilhosPermitidos.includes(bairroPassageiro)
+        ) {
+          corridasEncontradas++;
 
-//        console.log(`🔄 Avaliando corrida ${id} - Bairro passageiro: ${bairroPassageiro}`);
+          const creditosNecessarios = calcularCreditosPorValor(corrida.preco);
 
-        if (
-          (corrida.status === 'pendente' || corrida.status === 'cancelado') &&
-          bairrosFilhosPermitidos.includes(bairroPassageiro)
-        ) {
-          corridasEncontradas++;
+          const card = document.createElement('div');
+          card.className = 'card-corrida';
+          card.id = `card-${id}`;
 
-          const creditosNecessarios = calcularCreditosPorValor(corrida.preco);
+          card.innerHTML = `
+            <div style="padding: 8px 10px; background: #f9f9f9; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); font-size: 13px; line-height: 1.3;">
+              <p style="margin: 4px 0;"><i class="fas fa-map-marker-alt"></i> <strong>Partida:</strong> ${corrida.partida}</p>
+              <p style="margin: 4px 0;"><i class="fas fa-map-pin"></i> <strong>Destino:</strong> ${corrida.destino}</p>
 
-          const card = document.createElement('div');
-          card.className = 'card-corrida';
-          card.id = `card-${id}`;
+              <div style="display: flex; justify-content: space-between; margin: 6px 0;">
+                <span><i class="fas fa-road"></i> ${corrida.distancia_km.toFixed(1)} km</span>
+                <span><i class="fas fa-coins"></i> R$ ${corrida.preco.toFixed(2)}</span>
+                <span><i class="fas fa-wallet"></i> ${creditosNecessarios} créditos</span>
+              </div>
 
-          card.innerHTML = `
-            <p><i class="fas fa-map-marker-alt"></i> <strong>Partida:</strong><br>${corrida.partida}</p>
-            <p><i class="fas fa-map-pin"></i> <strong>Destino:</strong><br>${corrida.destino}</p>
-            <div style="display: flex; justify-content: center; gap: 12px; margin: 8px 0; font-size: 13px;">
-              <span><i class="fas fa-road"></i> ${corrida.distancia_km.toFixed(2)} km</span>
-              <span><i class="fas fa-coins"></i> R$ ${corrida.preco.toFixed(2)}</span>
-              <span><i class="fas fa-wallet"></i> ${creditosNecessarios} créditos</span>
-            </div>
-            <div style="display: flex; gap: 5px; margin-top: 2px;">
-              <button style="flex: 1; padding: 5px; font-size: 13px; border-radius: 6px; background-color: #4CAF50; color: white; border: none; font-weight: 600; cursor: pointer;"
-                onclick="aceitarCorrida('${id}', ${creditosNecessarios}, '${corrida.partida}', '${corrida.destino}', ${corrida.preco}, ${corrida.distancia_km})">
-                <i class="fas fa-check"></i> Aceitar
-              </button>
-              <button style="flex: 1; padding: 5px; font-size: 13px; border-radius: 6px; background-color: #e53935; color: white; border: none; font-weight: 600; cursor: pointer;"
-                onclick="fecharCorrida('${id}')">
-                <i class="fas fa-times"></i> Fechar
-              </button>
-            </div>
-          `;
+              <div style="display: flex; gap: 6px;">
+                <button style="flex: 1; padding: 4px; font-size: 12px; border-radius: 6px; background-color: #4CAF50; color: white; border: none; font-weight: 600; cursor: pointer;"
+                  onclick="aceitarCorrida('${id}', ${creditosNecessarios}, '${corrida.partida}', '${corrida.destino}', ${corrida.preco}, ${corrida.distancia_km})">
+                  <i class="fas fa-check"></i> Aceitar
+                </button>
+                <button style="flex: 1; padding: 4px; font-size: 12px; border-radius: 6px; background-color: #e53935; color: white; border: none; font-weight: 600; cursor: pointer;"
+                  onclick="fecharCorrida('${id}')">
+                  <i class="fas fa-times"></i> Fechar
+                </button>
+              </div>
+            </div>
+          `;
 
-          container.appendChild(card);
-        }
-      }
-
-//     console.log(`🎯 Total de corridas exibidas: ${corridasEncontradas}`);
-    });
+          container.appendChild(card);
+        }
+      }
+    });
 }
+
 
 function aceitarCorrida(id, creditosNecessarios, partida, destino, preco, distancia_km) {
 if (motoristaCreditos < creditosNecessarios) {
