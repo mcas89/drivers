@@ -358,13 +358,16 @@ function loginMotorista() {
       motoristaCPF = cpf;
       motoristaCreditos = data.creditos || 0;
       bairroPaiMotorista = data.bairroPai;
-
+      
+      
       document.getElementById('nomeMotorista').textContent = data.nome;
       document.getElementById('telefoneMotorista').textContent = data.telefone;
       document.getElementById('modeloMotorista').textContent = data.modelo;
       document.getElementById('placaMotorista').textContent = data.placa;
       document.getElementById('creditosMotorista').textContent = motoristaCreditos;
       document.getElementById('bairroMotorista').textContent = data.bairroPai;
+    
+    
 
       document.getElementById('loginContainer').classList.add('hidden');
       document.getElementById('painelMotorista').classList.remove('hidden');
@@ -374,6 +377,7 @@ function loginMotorista() {
       localStorage.setItem('motoristaLogado', cpf);
       solicitarWakeLock()
       buscarCorridaAceita();
+      
 
 
 
@@ -395,26 +399,25 @@ function calcularCreditosPorValor(preco) {
 
 function carregarCorridas() {
   if (!bairroPaiMotorista) {
-    console.warn('❌ Variável bairroPaiMotorista ainda não definida.');
     return;
   }
 
   const bairroPai = bairroPaiMotorista.trim().toLowerCase();
-  console.log('📍 Bairro pai informado pelo motorista:', bairroPai);
+ // console.log('📍 Bairro pai informado pelo motorista:', bairroPai);
 
   // Obtem os bairros filhos comparando em minúsculo
   const bairrosFilhosPermitidos = Object.entries(bairros).reduce((acc, [pai, filhos]) => {
     if (pai.toLowerCase() === bairroPai) {
-      console.log(`✅ Bairro pai reconhecido: ${pai}`);
+ //     console.log(`✅ Bairro pai reconhecido: ${pai}`);
       return filhos;
     }
     return acc;
   }, []);
 
-  console.log('👀 Bairros filhos permitidos:', bairrosFilhosPermitidos);
+ // console.log('👀 Bairros filhos permitidos:', bairrosFilhosPermitidos);
 
   if (!bairrosFilhosPermitidos || bairrosFilhosPermitidos.length === 0) {
-    console.warn('⚠️ Nenhum bairro filho encontrado para o bairro pai:', bairroPai);
+ //   console.warn('⚠️ Nenhum bairro filho encontrado para o bairro pai:', bairroPai);
   }
 
   fetch(`${baseURL}/corridas.json`)
@@ -429,7 +432,7 @@ function carregarCorridas() {
         const corrida = data[id];
         const bairroPassageiro = corrida.bairroPassageiro;
 
-        console.log(`🔄 Avaliando corrida ${id} - Bairro passageiro: ${bairroPassageiro}`);
+//        console.log(`🔄 Avaliando corrida ${id} - Bairro passageiro: ${bairroPassageiro}`);
 
         if (
           (corrida.status === 'pendente' || corrida.status === 'cancelado') &&
@@ -467,7 +470,7 @@ function carregarCorridas() {
         }
       }
 
-      console.log(`🎯 Total de corridas exibidas: ${corridasEncontradas}`);
+//     console.log(`🎯 Total de corridas exibidas: ${corridasEncontradas}`);
     });
 }
 
@@ -915,3 +918,44 @@ obterLocalizacaoAtual(function(localizacaoAtual) {
     }
 });
 }
+
+function carregarHistoricoMotorista() {
+  const cpfMotorista = window.cpfLogado || localStorage.getItem('motoristaLogado');
+  if (!cpfMotorista) {
+    return;
+  }
+
+  const url = `https://cardosoborracharia-a8854-default-rtdb.firebaseio.com/historico_motorista/${cpfMotorista}.json`;
+
+  fetch(url)
+    .then(res => res.json())
+    .then(historico => {
+      if (!historico) {
+        alert("Nenhuma corrida finalizada encontrada.");
+        return;
+      }
+
+      const container = document.getElementById('historicoMotoristaConteudo');
+      container.innerHTML = ''; // Limpa antes de preencher
+
+      const entradas = Object.entries(historico).sort((a, b) => b[0].localeCompare(a[0])); // Mais recentes primeiro
+      entradas.forEach(([chave, corrida]) => {
+        const card = document.createElement('div');
+        card.className = 'cardHistoricoMotorista';
+        card.innerHTML = `
+          <p><strong>Partida:</strong> ${corrida.partida}</p>
+          <p><strong>Destino:</strong> ${corrida.destino}</p>
+          <p><strong>Valor recebido:</strong> <span class="destaqueValor">R$ ${corrida.preco.toFixed(2)}</span></p>
+          <p><strong>Passageiro:</strong> ${corrida.passageiro || '---'}</p>
+          <p><strong>Finalizada em:</strong> ${new Date(corrida.dataFinalizacao).toLocaleString()}</p>
+        `;
+        container.appendChild(card);
+      });
+
+      document.getElementById('cardHistoricoMotorista').classList.remove('hidden');
+    })
+    .catch(err => {
+      alert("Erro ao carregar histórico do motorista.");
+    });
+}
+
