@@ -10,6 +10,10 @@ let timestampAceitacao = null;
 let podeCancelarComCredito = true;
 let bairroPaiMotorista = '';
 
+let intervaloHistorico = null;
+let ultimaCorridaExibida = null;
+
+
 const bairros = {
   "Parque Continental": [
       "Continental I", "Continental II", "Continental III", "Continental IV", "Continental V",
@@ -45,6 +49,7 @@ const bairros = {
 };
 
 window.onload = () => {
+  console.log("🚀 window.onload iniciado");
   solicitarWakeLock();
   document.getElementById('painelMotorista').classList.add('hidden');
 
@@ -347,6 +352,8 @@ function sairParaLogin() {
 
 function loginMotorista() {
 
+  console.log("🔑 loginMotorista chamado");
+
   const cpf = document.getElementById('cpf').value;
   const senha = document.getElementById('senha').value;
 
@@ -378,10 +385,13 @@ function loginMotorista() {
       solicitarWakeLock()
       buscarCorridaAceita();
       
-
+      monitorarHistoricoMotorista(motoristaCPF);
+      console.log("👉 monitorarHistoricoMotorista chamado com CPF:", motoristaCPF);
 
 
       carregarCorridas();
+
+
       setInterval(carregarCorridas, 5000);
     });
 }
@@ -958,4 +968,70 @@ function carregarHistoricoMotorista() {
       alert("Erro ao carregar histórico do motorista.");
     });
 }
+
+function monitorarHistoricoMotorista(cpfMotorista) {
+  console.log("✅ monitorarHistoricoMotorista foi chamada com CPF:", cpfMotorista);
+  if (intervaloHistorico) clearInterval(intervaloHistorico);
+
+  intervaloHistorico = setInterval(() => {
+    fetch(`${baseURL}/historico_motorista/${cpfMotorista}.json`)
+      .then(res => res.json())
+      .then(historico => {
+        console.log("⏱️ Verificando histórico:", historico);
+        if (!historico) return;
+
+        const chaves = Object.keys(historico).sort();
+        const ultimaChave = chaves[chaves.length - 1];
+        const ultimaCorrida = historico[ultimaChave];
+
+        if (ultimaCorrida.status === 'finalizada' && !window.cardJaMostrado) {
+          window.cardJaMostrado = true; // evita repetição
+
+          document.getElementById('finalizadaPartida').textContent = ultimaCorrida.partida;
+          document.getElementById('finalizadaDestino').textContent = ultimaCorrida.destino;
+          document.getElementById('finalizadaPreco').textContent = ultimaCorrida.preco.toFixed(2);
+          document.getElementById('cardCorridaFinalizada').classList.remove('hidden');
+
+          window.ultimaChaveHistorico = ultimaChave;
+        }
+      })
+      .catch(err => console.error("❌ Erro ao verificar histórico:", err));
+
+       console.log("🔍 Buscando histórico para CPF:", cpfMotorista); // ADICIONE ISSO
+  fetch(`<span class="math-inline">\{baseURL\}/historico\_motorista/</span>{cpfMotorista}.json`)
+  
+      
+  }, 3000);
+console.log("⏰ Intervalo de histórico iniciado para CPF:", cpfMotorista);
+
+}
+
+function exibirCardFinalizacao(corrida, cpfMotorista, chaveCorrida) {
+  document.getElementById("cardPartida").textContent = corrida.partida;
+  document.getElementById("cardDestino").textContent = corrida.destino;
+  document.getElementById("cardPreco").textContent = corrida.preco.toFixed(2);
+  document.getElementById("cardFinalizacao").classList.remove("hidden");
+
+  // Salva para depois alterar o status no "fechar"
+  window.dadosCorridaFinalizada = { cpfMotorista, chaveCorrida };
+}
+
+function fecharCardFinalizada() {
+  const cpfMotorista = localStorage.getItem('motoristaLogado');
+  const chave = window.ultimaChaveHistorico;
+  if (!cpfMotorista || !chave) return;
+
+  const url = `${baseURL}/historico_motorista/${cpfMotorista}/${chave}/status.json`;
+  fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify('exibido')
+  }).then(() => {
+    document.getElementById('cardCorridaFinalizada').classList.add('hidden');
+    window.ultimaChaveHistorico = null;
+    window.cardJaMostrado = false;
+  }).catch(err => console.error('❌ Erro ao atualizar status:', err));
+}
+
+
 
