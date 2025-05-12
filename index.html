@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>App Motorista</title>
+
+  <link rel="stylesheet" href="estilos.css"> 
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+
+</head>
+
+<body>
+  <div class="container" id="loginContainer">
+    <h2><i class="fas fa-user-shield"></i> Login Motorista</h2>
+    <input type="text" id="cpf" placeholder="CPF">
+    <input type="password" id="senha" placeholder="Senha">
+    <button onclick="loginMotorista()">
+      <i class="fas fa-sign-in-alt"></i> Entrar
+    </button>
+    <p>Não tem cadastro? <a href="#" onclick="mostrarCadastro()">Cadastre-se</a></p>
+  </div>
+
+  <div class="container hidden" id="cadastroContainer">
+    <h2><i class="fas fa-id-card"></i> Cadastro Motorista</h2>
+    <input type="text" id="nomeCadastro" placeholder="Nome">
+    <input type="text" id="cpfCadastro" placeholder="CPF">
+    <input type="password" id="senhaCadastro" placeholder="Senha">
+    <input type="text" id="telefoneCadastro" placeholder="Telefone">
+    <input type="text" id="modeloCadastro" placeholder="Modelo do Veículo">
+    <input type="text" id="placaCadastro" placeholder="Placa">
+      <select id="BairroPai">
+        <option value="">Bairro</option>
+      </select>
+    <button onclick="cadastrarMotorista()">
+      <i class="fas fa-user-plus"></i> Cadastrar
+    </button>
+    <p><a href="#" onclick="mostrarLogin()">Já tem conta? Entrar</a></p>
+  </div>
+
+  <div class="container" id="painelMotorista">
+
+      <div class="container" id="painelMotorista">
+
+
+      <!-- Linha de ícones no topo -->
+      <div class="topoIcons">
+        <div class="iconItem">
+          <i class="fas fa-wallet"></i>
+          <span id="creditosMotorista" style="font-size: 0.8rem;">0</span>
+        </div>
+
+
+        <div class="iconItem">
+          <i class="fas fa-map-marker-alt"></i>
+          <span class="iconText" id="bairroMotorista"></span>
+        </div>                     
+
+
+        <div class="iconItem" onclick="editarDadosMotorista()">
+          <i class="fas fa-pen"></i>
+          <span class="iconText">Editar</span>
+        </div>
+
+        
+        <div class="iconItem" onclick="carregarHistoricoMotorista()">
+            <i class="fas fa-clock"></i>
+            <span class="iconText">Histórico</span>
+        </div>
+
+
+
+    
+        <div class="iconItem" onclick="logoutMotorista()">
+          <i class="fas fa-sign-out-alt"></i>
+          <span class="iconText">Logof</span>
+        </div>
+
+         </div>
+
+
+
+    
+      <!-- Informações do motorista -->
+    <div class="cardPainel">
+      <h2><i class="fas fa-user"></i> <span id="nomeMotorista"></span></h2>
+      <p><i class="fas fa-phone"></i> <span id="telefoneMotorista"></span></p>
+      <p><i class="fas fa-car-side"></i> <span id="modeloMotorista"></span> - <span id="placaMotorista"></span></p>
+    </div>
+    
+    </div>
+    
+  
+
+    <h3 id="corridasDisponiveis">
+      <i class="fas fa-taxi"></i> Buscando corridas
+      <i id="loadingIcon" class="fas fa-spinner fa-spin hidden" style="margin-left: 10px;"></i>
+    </h3>
+
+
+
+    <div id="corridasContainer"></div>
+
+    <div id="corridaAceitaCard" class="card hidden card-corrida">
+      <div class="card-header">
+        <h4 class="card-title" style="display: flex; align-items: center; justify-content: center; width: 100%; margin: 0;">
+          <i class="fas fa-check-circle icon-green" style="margin-right: 8px;"></i>
+          Corrida Aceita
+        </h4>
+      </div>
+    
+    
+      <!-- Bloco de partida -->
+      <div class="info-bloco">
+        <div class="info-linha">
+          <i class="fas fa-map-marker-alt icon-red"></i> 
+          <strong>Partida:</strong>
+          <i class="fas fa-copy icon-copy" onclick="copiarTexto('endPartida')" style="margin-left: 10px; font-size: 16px;"></i>
+          <i class="fas fa-location-arrow icon-blue" onclick="navegarPassageiro()" style="margin-left: 10px; cursor: pointer; font-size: 16px;"></i>
+        </div>
+        <p id="endPartida" class="endereco-texto"></p>
+      </div>
+    
+      <!-- Bloco de destino -->
+      <div class="info-bloco">
+        <div class="info-linha">
+          <i class="fas fa-map-pin icon-blue"></i> 
+          <strong>Destino:</strong>
+          <i class="fas fa-copy icon-copy" onclick="copiarTexto('endDestino')" style="margin-left: 10px; font-size: 16px;"></i>
+          <i class="fas fa-location-arrow icon-blue" onclick="navegarDestino()" style="margin-left: 10px; cursor: pointer; font-size: 16px;"></i>
+        </div>
+        <p id="endDestino" class="endereco-texto"></p>
+      </div>
+    
+      <!-- Bloco de valores -->
+      <div class="info-valores">
+        <p>
+          <i class="fas fa-coins icon-gold"></i> 
+          <strong>Valor:</strong> <span id="valorCorrida"></span>
+        </p>
+        <p>
+          <i class="fas fa-road icon-gray"></i> 
+          <strong>Distância:</strong> <span id="distanciaAceita"></span> km
+        </p>
+      </div>
+    
+      <!-- Mapa -->
+      <div id="mapaCorrida" class="mapa-corrida"></div>
+    </div>
+    
+    
+    </div>
+
+    </div>
+  </div>
+
+
+  <div id="editarModal" class="modal hidden">
+    
+    <div class="modal-content">
+      <h3>Editar Dados</h3>
+      <label>Nome:</label>
+      <input type="text" id="editarNome">
+
+
+  
+      <label>Telefone:</label>
+      <input type="text" id="editarTelefone">
+  
+      <label>Modelo:</label>
+      <input type="text" id="editarModelo">
+  
+      <label>Placa:</label>
+      <input type="text" id="editarPlaca">
+
+      <label>Bairro:</label>
+      <select id="editarBairro">
+        <option value="">Selecione um bairro</option>
+      </select>
+ 
+      <button onclick="salvarEdicao()">Salvar</button>
+      <button onclick="fecharModal()" class="cancelar">Cancelar</button>
+    </div>
+  </div>
+
+<div id="editarBairroModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Editar Bairro</h3>
+    <select id="editarBairro">
+      <option value="">Selecione um bairro</option>
+    </select>
+    <button onclick="salvarBairro()">Salvar</button>
+    <button onclick="fecharModalBairro()" class="cancelar">Cancelar</button>
+  </div>
+</div>
+
+<div id="cardHistoricoMotorista" class="cardFlutuante hidden">
+  <button onclick="document.getElementById('cardHistoricoMotorista').classList.add('hidden')" class="fecharCard">X</button>
+  <h3>Histórico de Corridas</h3>
+  <div id="historicoMotoristaConteudo"></div>
+</div>
+
+
+<div id="cardCorridaFinalizada" class="hidden">
+    <h3>Corrida Finalizada</h3>
+    <p><strong>Partida:</strong> <span id="finalizadaPartida"></span></p>
+    <p><strong>Destino:</strong> <span id="finalizadaDestino"></span></p>
+    <p><strong>Preço a receber:</strong> R$ <span id="finalizadaPreco"></span></p>
+    <button onclick="fecharCardFinalizada()">Fechar</button>
+</div>
+
+
+
+  
+</body>
+
+<script src="script.js"></script>
+
+</body>
+</html>
