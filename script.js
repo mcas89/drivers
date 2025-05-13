@@ -1,0 +1,1067 @@
+const baseURL = 'https://cardosoborracharia-a8854-default-rtdb.firebaseio.com';
+const geoapifyKey = '6d5858a5a2b143618a05523338f5a0aa';
+let motoristaCPF = '';
+let motoristaCreditos = 0;
+let rotaAtual = null;
+let cancelamentoPermitido = true;
+let mapaCorrida;
+let wakeLock = null;
+let timestampAceitacao = null;
+let podeCancelarComCredito = true;
+let bairroPaiMotorista = '';
+
+let intervaloHistorico = null;
+let ultimaCorridaExibida = null;
+
+const bairros = {
+  "Parque Continental": [
+      "Continental I", "Continental II", "Continental III", "Continental IV", "Continental V",
+      "Jardim Renzo (Gleba I)", "Jardim Betel (Antigo Parque Continental Gleba B)",
+      "Jardim Gracinda (Gleba II)", "Jardim Cambará (Gleba III)", "Jardim Valéria (Gleba IV)",
+      "Jardim Itapoã (Gleba IV)", "Jardim Adriana I (Gleba V)", "Jardim Adriana II (Gleba V)"
+  ],
+  "Cabuçu": [
+      "Vila Cambara", "Jardim Dorali", "Jardim Palmira", "Jardim Rosana", "Jardim Renzo",
+      "Recreio São Jorge", "Novo Recreio", "Chácaras Cabuçu", "Jardim Monte Alto"
+  ],
+  "São João": [
+      "Vila Rica", "Vila São João", "Jardim São Geraldo", "Jardim Vida Nova", "Jardim São João",
+      "Vila São Carlos", "Jardim Lenize", "Jardim Bondança", "Jardim Jade", "Jardim Cristina",
+      "Vila Girassol", "Jardim Santa Terezinha", "Jardim Aeródromo", "Cidade Soberana",
+      "Jardim Santo Expedito", "Cidade Seródio", "Jardim Novo Portugal", "Jardim Regina",
+      "Conjunto Residencial Haroldo Veloso"
+  ],
+  "Taboão": [
+      "Vila Mesquita", "Jardim Nova Taboão", "Jardim Santa Emília", "Jardim Imperial",
+      "Jardim Silvia", "Jardim Paraíso", "Jardim Acácio", "Parque Mikail", "Parque Mikail II",
+      "Jardim Araújo", "Vila Araújo", "Jardim Beirute", "Vila do Eden", "Jardim Odete",
+      "Jardim Taboão", "Jardim Santa Inês", "Jardim Santa Rita", "Jardim Belvedere",
+      "Jardim São Domingos", "Jardim Santa Lídia", "Jardim Dona Meri", "Jardim Marilena",
+      "Jardim Seviolli II", "Jardim Santa Vicência", "Jardim Sueli", "Jardim São José",
+      "Jardim Capri", "Jardim das Acácias", "Jardim Pereira", "Jardim Santo Eduardo",
+      "Jardim Tamassia", "Parque Santo Agostinho", "Parque Industrial do Jardim São Geraldo"
+  ],
+  "Fortaleza": [
+      "Jardim Fortaleza", "Rocinha"
+  ]
+  // ... (adicione os outros bairros)
+};
+
+window.onload = () => {
+  console.log("🚀 window.onload iniciado");
+  solicitarWakeLock();
+  carregarCorridas();
+  //monitorarHistoricoMotorista(motoristaCPF);
+  document.getElementById('painelMotorista').classList.add('hidden');
+
+  // Preencher combobox com os bairros pai
+  const selectBairroPai = document.getElementById('BairroPai');
+  for (const bairroPai in bairros) {
+    const option = document.createElement('option');
+    option.value = bairroPai;
+    option.textContent = bairroPai;
+    selectBairroPai.appendChild(option);
+  }
+
+  const selectEditarBairro = document.getElementById('editarBairro');
+  for (const bairroPai in bairros) {
+    const option = document.createElement('option');
+    option.value = bairroPai;
+    option.textContent = bairroPai;
+    selectEditarBairro.appendChild(option);
+  }
+
+  const motoristaSalvo = localStorage.getItem('motoristaLogado');
+  
+  if (motoristaSalvo) {
+    motoristaCPF = motoristaSalvo;
+    fetch(`${baseURL}/motoristas/${motoristaCPF}.json`)
+      .then(res => res.json())
+      .then(data => {
+        if (data) {
+          motoristaCreditos = data.creditos || 0;
+          document.getElementById('nomeMotorista').textContent = data.nome;
+          document.getElementById('telefoneMotorista').textContent = data.telefone;
+          document.getElementById('modeloMotorista').textContent = data.modelo;
+          document.getElementById('placaMotorista').textContent = data.placa;
+          document.getElementById('creditosMotorista').textContent = motoristaCreditos;
+          document.getElementById('bairroMotorista').textContent = data.bairroPai;
+
+          // 🔧 Preenche o campo BairroPai com o valor salvo do motorista
+          document.getElementById('BairroPai').value = data.bairroPai || '';
+
+          document.getElementById('loginContainer').classList.add('hidden');
+          document.getElementById('painelMotorista').classList.remove('hidden');
+          bairroPaiMotorista = data.bairroPai;
+
+          buscarCorridaAceita();
+          monitorarHistoricoMotorista(motoristaCPF);
+          carregarCorridas();
+          setInterval(carregarCorridas, 5000);
+        }
+      });
+  }
+};
+
+function logoutMotorista() {
+  localStorage.removeItem('motoristaLogado');
+  location.reload(); // Atualiza a página e volta pro login
+  document.getElementById('cardPainel').classList.remove('hidden');
+  document.getElementById('painelMotorista').classList.remove('hidden');
+  
+}
+
+async function solicitarWakeLock() {
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    console.log('Tela mantida ativa.');
+  } catch (err) {
+    console.error('Não foi possível manter a tela ativa:', err);
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (wakeLock !== null && document.visibilityState === 'visible') {
+    solicitarWakeLock();
+  }
+});
+
+function buscarCorridaAceita() {
+fetch(`${baseURL}/corridas.json`)
+.then(res => res.json())
+.then(data => {
+  if (!data) return;
+
+  for (const id in data) {
+    const corrida = data[id];
+    if (corrida.motorista === motoristaCPF && corrida.status === 'aceita') {
+      rotaAtual = id;
+
+      document.getElementById('endPartida').textContent = corrida.partida;
+      document.getElementById('endDestino').textContent = corrida.destino;
+      document.getElementById('valorCorrida').textContent = `R$ ${corrida.preco.toFixed(2)}`;
+      document.getElementById('distanciaAceita').textContent = corrida.distancia_km.toFixed(2);
+
+      document.getElementById('corridaAceitaCard').classList.remove('hidden');
+
+      mostrarMapa(corrida.partida, corrida.destino);
+
+      // 🔵 Criar o botão de Cancelar (se não existir)
+      const card = document.getElementById('corridaAceitaCard');
+      let btnCancelar = document.getElementById('btnCancelarTemp');
+      if (!btnCancelar) {
+        btnCancelar = document.createElement('button');
+        btnCancelar.id = 'btnCancelarTemp';
+        btnCancelar.style.marginTop = '10px';
+        btnCancelar.style.backgroundColor = 'red';
+        btnCancelar.style.color = 'white';
+        btnCancelar.style.borderRadius = '8px';
+        btnCancelar.style.padding = '10px';
+        btnCancelar.textContent = 'Cancelar Corrida';
+        btnCancelar.onclick = () => cancelarCorrida(id, calcularCreditosPorValor(corrida.preco));
+        card.appendChild(btnCancelar);
+      }
+
+      // 🕑 Salvar o momento da aceitação
+      timestampAceitacao = Date.now();
+
+      // 🔵 Buscar dados do passageiro
+      fetch(`${baseURL}/passageiros/${id}.json`)
+        .then(res => res.json())
+        .then(passageiro => {
+          if (passageiro) {
+            const infoPassageiro = document.createElement('div');
+            infoPassageiro.innerHTML = `
+              <p><strong>Passageiro:</strong> ${passageiro.nome}</p>
+              <p><strong>Telefone:</strong> ${passageiro.telefone}</p>
+            `;
+            card.appendChild(infoPassageiro);
+          }
+        })
+        .catch(error => {
+          console.error('Erro ao buscar dados do passageiro:', error);
+        });
+
+      break; // achou, pode parar
+    }
+  }
+})
+.catch(error => {
+  console.error('Erro ao buscar corrida aceita:', error);
+});
+}
+
+function finalizarCancelamento() {
+    // Remove a exibição do alerta padrão do navegador
+    document.getElementById('corridaAceitaCard').classList.add('hidden');
+    rotaAtual = null;
+    document.getElementById('corridasContainer').style.display = 'block';
+    document.querySelector('h3 i.fa-taxi').parentElement.style.display = 'block';
+    carregarCorridas();
+}
+
+function cancelarCorrida(id) {
+    if (!id) return;
+  
+    console.log('Iniciando cancelamento da corrida com id:', id);
+  
+    // Busca a corrida para saber quantos créditos foram usados
+    fetch(`${baseURL}/corridas/${id}.json`)
+      .then(res => res.json())
+      .then(corrida => {
+        if (!corrida) {
+          console.log('Corrida não encontrada');
+          return;
+        }
+  
+        const creditosUsados = corrida.creditosUsados || 0;
+  
+        const atualizacoes = {
+          [`corridas/${id}/status`]: 'pendente',
+          [`corridas/${id}/motorista`]: null
+        };
+  
+        console.log('Créditos usados:', creditosUsados);
+  
+        if (podeCancelarComCredito) {
+          fetch(`${baseURL}/motoristas/${motoristaCPF}/creditos.json`)
+            .then(res => res.json())
+            .then(creditosAtuais => {
+              const novosCreditos = (creditosAtuais || 0) + creditosUsados;
+              atualizacoes[`motoristas/${motoristaCPF}/creditos`] = novosCreditos;
+  
+              console.log('Novos créditos do motorista:', novosCreditos);
+  
+              fetch(`${baseURL}/.json`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(atualizacoes)
+              }).then(() => {
+                motoristaCreditos = novosCreditos;
+                document.getElementById('creditosMotorista').textContent = novosCreditos;
+                console.log('Chamando finalizarCancelamento');
+                finalizarCancelamento('w');  // Chama a função sem a mensagem
+                console.log('Chamando mostrarAlertaSimples');
+                mostrarAlertaSimples('Corrida cancelada');  // Exibe a mensagem de alerta
+                carregarCorridas();
+              });
+            })
+            .catch(error => {
+              console.error('Erro ao buscar créditos do motorista:', error);
+              alert('Erro ao buscar créditos do motorista.');
+            });
+        } else {
+          fetch(`${baseURL}/.json`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(atualizacoes)
+          }).then(() => {
+            console.log('Chamando finalizarCancelamento');
+            finalizarCancelamento('s');  // Chama a função sem a mensagem
+            console.log('Chamando mostrarAlertaSimples');
+            mostrarAlertaSimples('Corrida cancelada');  // Exibe a mensagem de alerta
+            carregarCorridas();
+          });
+        }
+      })
+      .catch(error => {
+        console.error('Erro ao cancelar corrida:', error);
+        alert('Erro ao cancelar a corrida. Tente novamente.');
+      });
+}
+  
+function mostrarCadastro() {
+  document.getElementById('loginContainer').classList.add('hidden');
+  document.getElementById('cadastroContainer').classList.remove('hidden');
+}
+
+function mostrarLogin() {
+  document.getElementById('cadastroContainer').classList.add('hidden');
+  document.getElementById('loginContainer').classList.remove('hidden');
+  document.getElementById('painelMotorista').classList.add('hidden');
+
+}
+
+async function cadastrarMotorista() {
+  const bairroPai = document.getElementById('BairroPai').value.trim();
+  const nome = document.getElementById('nomeCadastro').value.trim();
+  const cpf = document.getElementById('cpfCadastro').value.trim();
+  const senha = document.getElementById('senhaCadastro').value.trim();
+  const telefone = document.getElementById('telefoneCadastro').value.trim();
+  const modelo = document.getElementById('modeloCadastro').value.trim();
+  const placa = document.getElementById('placaCadastro').value.trim();
+
+  // Validação simples
+  if (!nome || !cpf || !senha || !telefone || !modelo || !placa || !bairroPai) {
+    alert('Por favor, preencha todos os campos.');
+    return;
+  }
+
+  // Validação de CPF
+  if (!validarCPF(cpf)) {
+    alert('CPF inválido. Por favor, digite um CPF válido.');
+    return;
+  }
+
+  try {
+    // Verifica se o CPF já está cadastrado
+    const res = await fetch(`${baseURL}/motoristas/${cpf}.json`);
+    if (!res.ok) throw new Error('Erro ao verificar CPF.');
+
+    const data = await res.json();
+    if (data) {
+      alert('Já existe um motorista cadastrado com este CPF.');
+      return;
+    }
+
+    // Cadastra o novo motorista
+    const response = await fetch(`${baseURL}/motoristas/${cpf}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nome,
+        senha,
+        telefone,
+        modelo,
+        placa,
+        bairroPai,
+        creditos: 0
+      })
+    });
+
+    if (!response.ok) throw new Error('Erro ao cadastrar motorista.');
+
+    alert('Cadastro realizado com sucesso!');
+
+    // Oculta o painel do motorista e mostra o login após o cadastro
+    document.getElementById('painelMotorista').classList.add('hidden');
+    mostrarLogin();
+
+  } catch (error) {
+    console.error(error);
+    alert('Erro ao cadastrar. Tente novamente.');
+  }
+}
+
+function sairParaLogin() {
+  // Oculta o painel do motorista ao sair do cadastro
+  document.getElementById('painelMotorista').classList.add('hidden');
+  
+  // Chama a função que exibe a tela de login
+  mostrarLogin();
+}
+
+function loginMotorista() {
+
+  console.log("🔑 loginMotorista chamado");
+
+  const cpf = document.getElementById('cpf').value;
+  const senha = document.getElementById('senha').value;
+
+  fetch(`${baseURL}/motoristas/${cpf}.json`)
+    .then(res => res.json())
+    .then(data => {
+      if (!data || data.senha !== senha) return alert('CPF ou senha incorretos');
+
+      motoristaCPF = cpf;
+      motoristaCreditos = data.creditos || 0;
+      bairroPaiMotorista = data.bairroPai;
+      
+      
+      document.getElementById('nomeMotorista').textContent = data.nome;
+      document.getElementById('telefoneMotorista').textContent = data.telefone;
+      document.getElementById('modeloMotorista').textContent = data.modelo;
+      document.getElementById('placaMotorista').textContent = data.placa;
+      document.getElementById('creditosMotorista').textContent = motoristaCreditos;
+      document.getElementById('bairroMotorista').textContent = data.bairroPai;
+    
+    
+
+      document.getElementById('loginContainer').classList.add('hidden');
+      document.getElementById('painelMotorista').classList.remove('hidden');
+      
+      
+
+      localStorage.setItem('motoristaLogado', cpf);
+      solicitarWakeLock()
+      buscarCorridaAceita();
+      
+      monitorarHistoricoMotorista(motoristaCPF);
+      console.log("👉 monitorarHistoricoMotorista chamado com CPF:", motoristaCPF);
+
+
+      carregarCorridas();
+
+
+      setInterval(carregarCorridas, 5000);
+    });
+}
+
+function calcularCreditosPorValor(preco) {
+  if (preco <= 10) return 1;
+  if (preco <= 15) return 2;
+  if (preco <= 20) return 3;
+  if (preco <= 25) return 4;
+  if (preco <= 30) return 5;
+  if (preco <= 40) return 6;
+  if (preco <= 50) return 7;
+  return 8;
+}
+
+let corridasTocadas = new Set(); // Rastreia IDs de corridas para as quais o som já tocou
+
+function carregarCorridas() {
+  if (!bairroPaiMotorista) {
+    return;
+  }
+
+  const bairroPai = bairroPaiMotorista.trim().toLowerCase();
+
+  // Obtém os bairros filhos comparando em minúsculo
+  const bairrosFilhosPermitidos = Object.entries(bairros).reduce((acc, [pai, filhos]) => {
+    if (pai.toLowerCase() === bairroPai) {
+      return filhos;
+    }
+    return acc;
+  }, []);
+
+  if (!bairrosFilhosPermitidos || bairrosFilhosPermitidos.length === 0) {
+    return;
+  }
+
+  fetch(`${baseURL}/corridas.json`)
+    .then(res => res.json())
+    .then(data => {
+      const container = document.getElementById('corridasContainer');
+      container.innerHTML = ''; // Limpa o container de corridas
+
+      // 🔁 Limpa do Set os IDs que não estão mais com status 'pendente'
+      for (const id in data) {
+        const corrida = data[id];
+        if (corridasTocadas.has(id) && corrida.status !== 'pendente') {
+          corridasTocadas.delete(id);
+        }
+      }
+
+      let corridasEncontradas = 0;
+      const somNotificacao = document.getElementById('somNotificacao'); // Referência ao áudio
+
+      for (const id in data) {
+        const corrida = data[id];
+        const bairroPassageiro = corrida.bairroPassageiro;
+
+        if (
+          (corrida.status === 'pendente' || corrida.status === 'cancelado') &&
+          bairrosFilhosPermitidos.includes(bairroPassageiro)
+        ) {
+          corridasEncontradas++;
+
+          const creditosNecessarios = calcularCreditosPorValor(corrida.preco);
+
+          const card = document.createElement('div');
+          card.className = 'card-corrida';
+          card.id = `card-${id}`;
+          card.innerHTML = `
+            <div style="padding: 8px 10px; background: #f9f9f9; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); font-size: 13px; line-height: 1.3;">
+              <p style="margin: 4px 0;"><i class="fas fa-map-marker-alt"></i> <strong>Partida:</strong> ${corrida.partida}</p>
+              <p style="margin: 4px 0;"><i class="fas fa-map-pin"></i> <strong>Destino:</strong> ${corrida.destino}</p>
+              <div style="display: flex; justify-content: space-between; margin: 6px 0;">
+                <span><i class="fas fa-road"></i> ${corrida.distancia_km.toFixed(1)} km</span>
+                <span><i class="fas fa-coins"></i> R$ ${corrida.preco.toFixed(2)}</span>
+                <span><i class="fas fa-wallet"></i> ${creditosNecessarios} créditos</span>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button style="flex: 1; padding: 4px; font-size: 12px; border-radius: 6px; background-color: #4CAF50; color: white; border: none; font-weight: 600; cursor: pointer;"
+                  onclick="aceitarCorrida('${id}', ${creditosNecessarios}, '${corrida.partida}', '${corrida.destino}', ${corrida.preco}, ${corrida.distancia_km})">
+                  <i class="fas fa-check"></i> Aceitar
+                </button>
+                <button style="flex: 1; padding: 4px; font-size: 12px; border-radius: 6px; background-color: #e53935; color: white; border: none; font-weight: 600; cursor: pointer;"
+                  onclick="fecharCorrida('${id}')">
+                  <i class="fas fa-times"></i> Fechar
+                </button>
+              </div>
+            </div>
+          `;
+          container.appendChild(card);
+
+          // 🔊 Som de notificação se ainda não tocou para essa corrida
+          if (!corridasTocadas.has(id)) {
+            somNotificacao.pause();
+            somNotificacao.currentTime = 0;
+            somNotificacao.play();
+            corridasTocadas.add(id); // Marca como notificada
+          }
+
+          monitorarHistoricoMotorista(motoristaCPF);
+        }
+      }
+    });
+}
+
+corridasTocadas.delete(idCorrida);
+
+function monitorarCorridaAceita(idCorrida, cpfMotorista) {
+  const interval = setInterval(() => {
+    fetch(`${baseURL}/corridas/${idCorrida}.json`)
+      .then(res => res.json())
+      .then(corrida => {
+        // Se a corrida sumiu completamente (deletada do banco)
+        if (!corrida) {
+          clearInterval(interval);
+          corridasTocadas.delete(idCorrida); // Remove ID do set
+          document.getElementById('corridaAceitaCard').classList.add('hidden');
+          document.querySelector('h3 i.fa-taxi').parentElement.style.display = 'block';
+          monitorarHistoricoMotorista(motoristaCPF);
+          location.reload();
+          return;
+        }
+
+        // Se a corrida foi cancelada por outro (não é mais "aceita")
+        if (corrida.status !== 'aceita' || corrida.motorista !== cpfMotorista) {
+          clearInterval(interval);
+          corridasTocadas.delete(idCorrida); // Remove ID do set
+          document.getElementById('corridaAceitaCard').classList.add('hidden');
+          document.querySelector('h3 i.fa-taxi').parentElement.style.display = 'block';
+          monitorarHistoricoMotorista(motoristaCPF);
+          location.reload();
+          return;
+        }
+      })
+      .catch(error => {
+        console.error('Erro ao monitorar corrida:', error);
+        clearInterval(interval);
+      });
+  }, 3000);
+}
+
+function aceitarCorrida(id, creditosNecessarios, partida, destino, preco, distancia_km) {
+if (motoristaCreditos < creditosNecessarios) {
+    mostrarAlertaSimples('Créditos insuficientes para aceitar esta corrida.');
+    return;
+}
+
+fetch(`${baseURL}/corridas/${id}.json`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        status: 'aceita',
+        motorista: motoristaCPF,
+        preco: preco,
+        distancia_km: distancia_km,
+        creditosUsados: creditosNecessarios
+    })
+}).then(() => {
+    motoristaCreditos -= creditosNecessarios;
+    document.getElementById('creditosMotorista').textContent = motoristaCreditos;
+
+    fetch(`${baseURL}/motoristas/${motoristaCPF}.json`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creditos: motoristaCreditos })
+    });
+
+    document.getElementById('endPartida').textContent = partida;
+    document.getElementById('endDestino').textContent = destino;
+    document.getElementById('valorCorrida').textContent = `R$ ${preco.toFixed(2)}`;
+    document.getElementById('distanciaAceita').textContent = distancia_km.toFixed(2);
+
+    const card = document.getElementById('corridaAceitaCard');
+    
+    // Limpar dados antigos do passageiro assim que o card for aberto
+    const antigoPassageiro = card.querySelector('.info-passageiro');
+    if (antigoPassageiro) {
+        antigoPassageiro.remove();
+    }
+
+    // Mostrar o card de corrida aceita
+    card.classList.remove('hidden');
+
+    // Esconder os ícones de corridas disponíveis
+    document.querySelector('h3 i.fa-taxi').parentElement.style.display = 'none';
+    document.getElementById('corridasContainer').style.display = 'none';
+
+    // Remover o card antigo da corrida, se houver
+    const cardAceito = document.getElementById(`card-${id}`);
+    if (cardAceito) {
+        cardAceito.remove();
+    }
+
+    // Atualizar a variável da rota atual
+    rotaAtual = id;
+    mostrarMapa(partida, destino);
+
+    // Criação do botão cancelar
+    const btnExistente = document.getElementById('btnCancelarTemp');
+    if (btnExistente) btnExistente.remove();
+
+    let btnCancelar = document.createElement('button');
+    btnCancelar.id = 'btnCancelarTemp';
+    btnCancelar.style.marginTop = '10px';
+    btnCancelar.style.backgroundColor = 'red';
+    btnCancelar.style.color = 'white';
+    btnCancelar.style.borderRadius = '8px';
+    btnCancelar.style.padding = '10px';
+    btnCancelar.textContent = 'Cancelar Corrida (10s)';
+    btnCancelar.onclick = () => cancelarCorrida(id);
+
+    card.appendChild(btnCancelar);  // Adiciona o botão de cancelar no card
+
+    // ⏱️ Início do temporizador de cancelamento com crédito
+    let segundos = 10;
+    podeCancelarComCredito = true;
+
+    const interval = setInterval(() => {
+        segundos--;
+        btnCancelar.textContent = segundos > 0 ? `Cancelar Corrida (${segundos}s)` : 'Cancelar Corrida';
+
+        if (segundos === 0) {
+            clearInterval(interval);
+            podeCancelarComCredito = false;
+
+            // Mostrar dados do passageiro
+            fetch(`${baseURL}/passageiros/${id}.json`)
+                .then(res => res.json())
+                .then(passageiro => {
+                    if (passageiro) {
+                        const infoPassageiro = document.createElement('div');
+                        infoPassageiro.classList.add('info-passageiro');
+                        infoPassageiro.innerHTML = `
+                            <p><strong>Passageiro:</strong> ${passageiro.nome}</p>
+                            <p><strong>Telefone:</strong> ${passageiro.telefone}</p>
+                        `;
+                        card.appendChild(infoPassageiro);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao buscar dados do passageiro:', error);
+                });
+        }
+    }, 1000);
+
+    // 👁️ Iniciar monitoramento da corrida
+    monitorarCorridaAceita(id, motoristaCPF);
+
+}).catch(error => {
+    console.error('Erro ao aceitar a corrida:', error);
+    alert('Erro ao aceitar a corrida. Tente novamente.');
+});
+}
+
+function copiarTexto(id) {
+  const texto = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(texto);
+  mostrarAlertaSimples('copiado');
+}
+
+async function mostrarMapa(partida, destino) {
+    try {
+      const coords = await Promise.all([
+        getCoords(partida),
+        getCoords(destino)
+      ]);
+  
+      if (!coords[0] || !coords[1]) return;
+  
+      // Remove mapa anterior
+      if (mapaCorrida) {
+        mapaCorrida.remove();
+      }
+  
+      mapaCorrida = L.map('mapaCorrida').setView(coords[0], 13);
+  
+      // Camada visual
+      L.tileLayer(`https://maps.geoapify.com/v1/tile/osm-carto/{z}/{x}/{y}.png?apiKey=${geoapifyKey}`, {
+        attribution: '© OpenMapTiles © OpenStreetMap contributors',
+        maxZoom: 20
+      }).addTo(mapaCorrida);
+  
+      // Ícones personalizados
+      const iconeA = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/252/252025.png',
+        iconSize: [30, 30],
+        iconAnchor: [15, 30]
+      });
+  
+      const iconeB = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+        iconSize: [30, 30],
+        iconAnchor: [15, 30]
+      });
+  
+      // Marcadores visíveis mesmo que rota falhe
+      L.marker(coords[0], { icon: iconeA }).addTo(mapaCorrida).bindPopup("Partida").openPopup();
+      L.marker(coords[1], { icon: iconeB }).addTo(mapaCorrida).bindPopup("Destino");
+  
+      // ✅ Corrigido: ordem correta [latitude, longitude]
+      const rotaURL = `https://api.geoapify.com/v1/routing?waypoints=${coords[0][0]},${coords[0][1]}|${coords[1][0]},${coords[1][1]}&mode=drive&apiKey=${geoapifyKey}`;
+      const routeRes = await fetch(rotaURL);
+      const routeData = await routeRes.json();
+  
+      if (routeData.features && routeData.features.length > 0) {
+        const rotaCoords = routeData.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
+        L.polyline(rotaCoords, { color: 'blue', weight: 5 }).addTo(mapaCorrida);
+        mapaCorrida.fitBounds(rotaCoords, { padding: [50, 50] });
+  
+        document.getElementById('distanciaAceita').textContent = (routeData.features[0].properties.distance / 1000).toFixed(2);
+        document.getElementById('duracaoAceita').textContent = (routeData.features[0].properties.time / 60).toFixed(1);
+      } else {
+        console.warn('Rota não encontrada, mas marcadores exibidos.');
+      }
+    } catch (error) {
+      console.error('Erro ao mostrar o mapa:', error);
+    }
+}
+  
+async function getCoords(endereco) {
+  const res = await fetch(`https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(endereco)}&apiKey=${geoapifyKey}`);
+  const data = await res.json();
+  if (!data.features || data.features.length === 0) {
+    alert('Endereço não encontrado: ' + endereco);
+    return null;
+  }
+  return [data.features[0].geometry.coordinates[1], data.features[0].geometry.coordinates[0]];
+}
+
+async function mostrarMapa(partida, destino) {
+  const coords = await Promise.all([
+    getCoords(partida),
+    getCoords(destino)
+  ]);
+
+  if (!coords[0] || !coords[1]) return;
+
+  if (mapaCorrida) {
+    mapaCorrida.remove();
+  }
+  mapaCorrida = L.map('mapaCorrida').setView(coords[0], 13);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaCorrida);
+  L.marker(coords[0]).addTo(mapaCorrida).bindPopup("Partida").openPopup();
+  L.marker(coords[1]).addTo(mapaCorrida).bindPopup("Destino");
+
+  fetch(`https://api.geoapify.com/v1/routing?waypoints=${coords[0][1]},${coords[0][0]}|${coords[1][1]},${coords[1][0]}&mode=drive&apiKey=${geoapifyKey}`)
+    .then(res => res.json())
+    .then(data => {
+      if (!data.features || data.features.length === 0);
+
+      const rota = data.features[0];
+      const rotaCoords = rota.geometry.coordinates.map(c => [c[1], c[0]]);
+      L.polyline(rotaCoords, { color: 'blue' }).addTo(mapaCorrida);
+      mapaCorrida.fitBounds(rotaCoords);
+
+      document.getElementById('distanciaAceita').textContent = (rota.properties.distance / 1000).toFixed(2);
+      document.getElementById('duracaoAceita').textContent = (rota.properties.time / 60).toFixed(1);
+    })
+    .catch();
+}
+
+function fecharCorrida(id) {
+  const card = document.getElementById(`card-${id}`);
+  if (card) {
+    card.remove();
+    
+  }
+}
+
+function validarCPF(cpf) {
+  cpf = cpf.replace(/[^\d]+/g, ''); // Remove não números
+
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1+$/.test(cpf)) return false; // Ex: 111.111.111-11
+
+  let soma = 0;
+  for (let i = 0; i < 9; i++) {
+    soma += parseInt(cpf.charAt(i)) * (10 - i);
+  }
+  let resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(cpf.charAt(9))) return false;
+
+  soma = 0;
+  for (let i = 0; i < 10; i++) {
+    soma += parseInt(cpf.charAt(i)) * (11 - i);
+  }
+  resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(cpf.charAt(10))) return false;
+
+  return true;
+}
+
+function mostrarAlertaSimples(mensagem) {
+// Evita criar vários alertas empilhados
+if (document.getElementById('alerta-simples')) return;
+
+const alerta = document.createElement('div');
+alerta.id = 'alerta-simples';
+alerta.style.position = 'fixed';
+alerta.style.top = '20px';
+alerta.style.left = '50%';
+alerta.style.transform = 'translateX(-50%)';
+alerta.style.backgroundColor = '#ff4d4d'; // vermelho mais bonito
+alerta.style.color = '#fff';
+alerta.style.padding = '12px 20px';
+alerta.style.borderRadius = '8px';
+alerta.style.textAlign = 'center';
+alerta.style.zIndex = '1000';
+alerta.style.fontSize = '16px';
+alerta.style.fontFamily = 'Arial, sans-serif';
+alerta.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+alerta.style.opacity = '0';
+alerta.style.transition = 'opacity 0.5s ease';
+
+alerta.innerText = mensagem;
+document.body.appendChild(alerta);
+
+// Deixa o alerta visível com transição
+setTimeout(() => {
+    alerta.style.opacity = '1';
+}, 50);
+
+// Some depois de 4 segundos
+setTimeout(() => {
+    alerta.style.opacity = '0';
+    setTimeout(() => {
+        alerta.remove();
+    }, 500); // Espera a transição terminar antes de remover
+}, 4000);
+}
+
+function editarDadosMotorista() {
+  fetch(`${baseURL}/motoristas/${motoristaCPF}.json`)
+    .then(res => res.json())
+    .then(data => {
+      if (data) {
+        // Preencher os campos com os dados do motorista
+        document.getElementById('editarNome').value = data.nome || '';
+        document.getElementById('editarTelefone').value = data.telefone || '';
+        document.getElementById('editarModelo').value = data.modelo || '';
+        document.getElementById('editarPlaca').value = data.placa || '';
+
+        // Preencher o campo de Bairro no modal
+        const selectEditarBairro = document.getElementById('editarBairro');
+        // Adicionar os bairros ao select, se ainda não foram carregados
+        if (!selectEditarBairro.hasChildNodes()) {
+          for (const bairroPai in bairros) {
+            const option = document.createElement('option');
+            option.value = bairroPai;
+            option.textContent = bairroPai;
+            selectEditarBairro.appendChild(option);
+          }
+        }
+        // Definir o bairro atual do motorista no select
+        document.getElementById('editarBairro').value = data.bairroPai || '';
+
+        // Exibir o modal de edição
+        document.getElementById('editarModal').classList.remove('hidden');
+      }
+    });
+}
+
+function salvarEdicao() {
+  const novoNome = document.getElementById('editarNome').value.trim();
+  const novoTel = document.getElementById('editarTelefone').value.trim();
+  const novoModelo = document.getElementById('editarModelo').value.trim();
+  const novaPlaca = document.getElementById('editarPlaca').value.trim();
+  const novoBairro = document.getElementById('editarBairro').value.trim(); // Captura o bairro editado
+
+  const atualizados = {
+    nome: novoNome,
+    telefone: novoTel,
+    modelo: novoModelo,
+    placa: novaPlaca,
+    bairroPai: novoBairro // Atualiza o bairro também
+  };
+
+  fetch(`${baseURL}/motoristas/${motoristaCPF}.json`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(atualizados)
+  })
+  .then(res => res.json())
+  .then(() => {
+    // Atualiza na interface
+    document.getElementById('nomeMotorista').textContent = novoNome;
+    document.getElementById('telefoneMotorista').textContent = novoTel;
+    document.getElementById('modeloMotorista').textContent = novoModelo;
+    document.getElementById('placaMotorista').textContent = novaPlaca;
+    document.getElementById('bairroMotorista').textContent = novoBairro; // Atualiza o bairro na interface
+
+    bairroPaiMotorista = novoBairro;
+    carregarCorridas();
+    monitorarHistoricoMotorista(motoristaCPF);
+
+
+    fecharModal();
+    mostrarAlertaSimples('Dados atualizados com sucesso!');
+  })
+  .catch(err => {
+    console.error("Erro ao salvar edição:", err);
+    alert("Erro ao salvar os dados.");
+  });
+}
+
+function fecharModal() {
+document.getElementById('editarModal').classList.add('hidden');
+}
+
+function obterLocalizacaoAtual(callback) {
+if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(position) {
+        const localizacaoAtual = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+        };
+        callback(localizacaoAtual); // Retorna a localização atual para a função de callback
+    }, function() {
+        alert("Não foi possível obter sua localização.");
+    });
+} else {
+    alert("Geolocalização não é suportada pelo seu navegador.");
+}
+}
+
+function navegarPassageiro() {
+obterLocalizacaoAtual(function(localizacaoAtual) {
+    const partida = document.getElementById('endPartida').textContent; // Endereço de partida do passageiro
+    if (partida) {
+        const enderecoPartida = encodeURIComponent(partida); // Codifica o endereço para a URL
+        // Cria a URL do Google Maps com a localização atual e o endereço de partida
+        const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${localizacaoAtual.lat},${localizacaoAtual.lng}&destination=${enderecoPartida}`;
+        window.open(googleMapsUrl, '_blank'); // Abre o Google Maps em uma nova aba
+    } else {
+        alert('Endereço de partida não encontrado!');
+    }
+});
+}
+
+function navegarDestino() {
+obterLocalizacaoAtual(function(localizacaoAtual) {
+    const destino = document.getElementById('endDestino').textContent; // Endereço de destino do passageiro
+    if (destino) {
+        const enderecoDestino = encodeURIComponent(destino); // Codifica o endereço para a URL
+        // Cria a URL do Google Maps com a localização atual e o endereço de destino
+        const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${localizacaoAtual.lat},${localizacaoAtual.lng}&destination=${enderecoDestino}`;
+        window.open(googleMapsUrl, '_blank'); // Abre o Google Maps em uma nova aba
+    } else {
+        alert('Endereço de destino não encontrado!');
+    }
+});
+}
+
+function carregarHistoricoMotorista() {
+  const cpfMotorista = window.cpfLogado || localStorage.getItem('motoristaLogado');
+  if (!cpfMotorista) {
+    return;
+  }
+
+  const url = `https://cardosoborracharia-a8854-default-rtdb.firebaseio.com/historico_motorista/${cpfMotorista}.json`;
+
+  fetch(url)
+    .then(res => res.json())
+    .then(historico => {
+      if (!historico) {
+        alert("Nenhuma corrida finalizada encontrada.");
+        return;
+      }
+
+      const container = document.getElementById('historicoMotoristaConteudo');
+      container.innerHTML = ''; // Limpa antes de preencher
+
+      const entradas = Object.entries(historico).sort((a, b) => b[0].localeCompare(a[0])); // Mais recentes primeiro
+      entradas.forEach(([chave, corrida]) => {
+        const card = document.createElement('div');
+        card.className = 'cardHistoricoMotorista';
+        card.innerHTML = `
+          <p><strong>Partida:</strong> ${corrida.partida}</p>
+          <p><strong>Destino:</strong> ${corrida.destino}</p>
+          <p><strong>Valor recebido:</strong> <span class="destaqueValor">R$ ${corrida.preco.toFixed(2)}</span></p>
+          <p><strong>Passageiro:</strong> ${corrida.passageiro || '---'}</p>
+          <p><strong>Finalizada em:</strong> ${new Date(corrida.dataFinalizacao).toLocaleString()}</p>
+        `;
+        container.appendChild(card);
+      });
+
+      document.getElementById('cardHistoricoMotorista').classList.remove('hidden');
+      carregarCorridas();
+    })
+    .catch(err => {
+      alert("Erro ao carregar histórico do motorista.");
+    });
+}
+
+function monitorarHistoricoMotorista(cpfMotorista) {
+  console.log("✅ monitorarHistoricoMotorista foi chamada com CPF:", cpfMotorista);
+  if (intervaloHistorico) clearInterval(intervaloHistorico);
+
+  intervaloHistorico = setInterval(() => {
+    fetch(`${baseURL}/historico_motorista/${cpfMotorista}.json`)
+      .then(res => res.json())
+      .then(historico => {
+        console.log("⏱️ Verificando histórico:", historico);
+        if (!historico) return;
+
+        const chaves = Object.keys(historico).sort();
+        const ultimaChave = chaves[chaves.length - 1];
+        const ultimaCorrida = historico[ultimaChave];
+
+        if (ultimaCorrida.status === 'finalizada' && !window.cardJaMostrado) {
+          window.cardJaMostrado = true; // evita repetição
+
+          document.getElementById('finalizadaPartida').textContent = ultimaCorrida.partida;
+          document.getElementById('finalizadaDestino').textContent = ultimaCorrida.destino;
+          document.getElementById('finalizadaPreco').textContent = ultimaCorrida.preco.toFixed(2);
+          document.getElementById('cardCorridaFinalizada').classList.remove('hidden');
+
+          window.ultimaChaveHistorico = ultimaChave;
+        }
+      })
+      .catch(err => console.error("❌ Erro ao verificar histórico:", err));
+
+       console.log("🔍 Buscando histórico para CPF:", cpfMotorista); // ADICIONE ISSO
+  fetch(`<span class="math-inline">\{baseURL\}/historico\_motorista/</span>{cpfMotorista}.json`)
+  
+      
+  }, 3000);
+console.log("⏰ Intervalo de histórico iniciado para CPF:", cpfMotorista);
+
+}
+
+function exibirCardFinalizacao(corrida, cpfMotorista, chaveCorrida) {
+  document.getElementById("cardPartida").textContent = corrida.partida;
+  document.getElementById("cardDestino").textContent = corrida.destino;
+  document.getElementById("cardPreco").textContent = corrida.preco.toFixed(2);
+  document.getElementById("cardFinalizacao").classList.remove("hidden");
+ // monitorarHistoricoMotorista(motoristaCPF);
+
+  // Salva para depois alterar o status no "fechar"
+  window.dadosCorridaFinalizada = { cpfMotorista, chaveCorrida };
+}
+
+function fecharCardFinalizada() {
+  const cpfMotorista = localStorage.getItem('motoristaLogado');
+  const chave = window.ultimaChaveHistorico;
+  //monitorarHistoricoMotorista(motoristaCPF);
+  if (!cpfMotorista || !chave) return;
+
+  const url = `${baseURL}/historico_motorista/${cpfMotorista}/${chave}/status.json`;
+  fetch(url, {
+  
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify('exibido')
+    
+  }).then(() => {
+    document.getElementById('cardCorridaFinalizada').classList.add('hidden');
+    window.ultimaChaveHistorico = null;
+    window.cardJaMostrado = false;
+
+    //monitorarHistoricoMotorista(motoristaCPF);
+    
+    location.reload();
+    monitorarHistoricoMotorista(motoristaCPF);
+  }).catch(err => console.error('❌ Erro ao atualizar status:', err));
+  
+    
+}
+
